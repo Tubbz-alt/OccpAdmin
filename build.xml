@@ -1,0 +1,52 @@
+<project name="OccpAdmin" default="dist" basedir=".">
+    <description>
+        OccpAdmin is the deployment tool for the OCCP.
+    </description>
+    <!-- set global properties for this build -->
+    <property name="src" location="occp"/>
+    <property name="build" location="build"/>
+    <property name="dist"  location="dist"/>
+
+    <target name="init">
+        <!-- Create the time stamp -->
+        <tstamp/>
+        <!-- Create the build directory structure used by compile -->
+        <mkdir dir="${build}"/>
+    </target>
+
+    <target name="compile" depends="init"
+        description="compile the source " >
+        <!-- Compile the java code from ${src} into ${build} -->
+        <javac includeantruntime="false" srcdir="${src}" destdir="${build}">
+            <!-- Partial workaround for https://bugs.eclipse.org/bugs/show_bug.cgi?id=175738 -->
+            <classpath location="${java.home}/lib/jce.jar"/>
+            <classpath>
+                <fileset dir="lib">
+                    <include name="**/*.jar"/>
+                </fileset>
+            </classpath>
+        </javac>
+        <manifest file="${src}/MANIFEST.MF">
+            <attribute name="Built-By" value="${user.name}"/>
+            <attribute name="Main-Class" value="edu.uri.dfcsc.occp.OccpAdmin"/>
+            <attribute name="Class-Path" value="bcpkix-jdk15on-149.jar bcprov-jdk15on-149.jar commons-codec-1.9.jar commons-compress-1.6.jar commons-io-2.4.jar commons-lang.jar commons-net.jar commons-validator-1.4.0.jar fat32-lib-0.7-SNAPSHOT.jar jsch-0.1.50.jar log4j.jar vboxjws-4.3.jar vim25.jar"/>
+        </manifest>
+    </target>
+
+    <target name="dist" depends="compile"
+        description="generate the distribution" >
+        <!-- Create the distribution directory -->
+        <mkdir dir="${dist}/lib"/>
+
+        <!-- Put everything in ${build} into the MyProject-${DSTAMP}.jar file -->
+        <jar jarfile="${dist}/lib/OccpAdmin-${DSTAMP}.jar" basedir="${build}" manifest="${src}/MANIFEST.MF"/>
+        <copy overwrite="true" file="${dist}/lib/OccpAdmin-${DSTAMP}.jar" tofile="${basedir}/lib/occp.jar"/>
+    </target>
+
+    <target name="clean"
+        description="clean up" >
+        <!-- Delete the ${build} and ${dist} directory trees -->
+        <delete dir="${build}"/>
+        <delete dir="${dist}"/>
+    </target>
+</project>
