@@ -2096,7 +2096,8 @@ public class OccpAdmin {
     public static void main(String[] args) {
         // Attempt to read in the logging configuration file for this program
         try {
-            LogManager.getLogManager().readConfiguration(new FileInputStream("logging.properties"));
+            LogManager.getLogManager().readConfiguration(
+                    new FileInputStream(System.getProperty("user.home") + "/occp/.logging.properties"));
         } catch (FileNotFoundException e) {
             // Logging properties missing, using defaults instead
         } catch (SecurityException | IOException e) {
