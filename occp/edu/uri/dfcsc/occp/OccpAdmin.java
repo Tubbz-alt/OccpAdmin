@@ -327,6 +327,9 @@ public class OccpAdmin {
                 runMode = val;
             } else if (param.equalsIgnoreCase("--hvtype") && !val.startsWith("--") && !val.isEmpty()) {
                 hypervisor = val;
+                // Hypervisors may need to process hvtype
+                unknownOptions.add("--hvtype");
+                unknownOptions.add(val);
             } else if (param.equalsIgnoreCase("--hvname") && !val.startsWith("--") && !val.isEmpty()) {
                 hvName = val;
             } else if (param.equalsIgnoreCase("--hvmap") && !val.startsWith("--") && !val.isEmpty()) {
