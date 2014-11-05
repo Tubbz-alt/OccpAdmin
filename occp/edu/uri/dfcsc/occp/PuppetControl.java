@@ -77,8 +77,7 @@ public class PuppetControl extends ConfigManagerControl {
             if (poweroff) {
                 // Determine which poweroff environment to use
                 if (phase.equals("phase2")) {
-                    puppetOutput = remoteConfig
-                            .sendCommand(puppetCommandBase + phase, puppetCommandBase + "poweroffp2");
+                    puppetOutput = remoteConfig.sendCommand(puppetCommandBase + phase, "/sbin/poweroff");
                 } else if (phase.equals("phase1")) {
                     puppetOutput = remoteConfig
                             .sendCommand(puppetCommandBase + phase, puppetCommandBase + "poweroffp1");
