@@ -1,0 +1,8 @@
+name          'occp'
+version       '1.0.0'
+author        'Dan Masterson'
+license       'GNU General Public License, Version 3.0'
+summary       'This module helps configure VMs for the OCCP'
+description   'This module helps configure VMs for the Open Cyber Challenge Platform'
+project_page  'https://www.opencyberchallenge.net'
+dependency    'puppetlabs/stdlib'

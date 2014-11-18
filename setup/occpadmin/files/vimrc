@@ -1,0 +1,74 @@
+execute pathogen#infect()
+
+filetype plugin indent on     " required! 
+
+set autoindent
+set bg=dark
+set cino=g0(0t0
+set complete=.,w,b,u,t,d,i
+set dictionary=/usr/share/dict/words
+set diffopt=filler,icase,iwhite
+if !isdirectory($HOME . "/.vim/tmp")
+    call mkdir($HOME . "/.vim/tmp", "p", 0700)
+endif
+set directory=$HOME/.vim/tmp
+set expandtab
+set fileencodings=utf-8,latin-1
+set fileencoding=utf-8
+set formatoptions=tqn2
+set grepprg=grep\ -nH\ $*
+set history=100
+set hlsearch
+set ignorecase
+set incsearch
+set isfname=@,48-57,/,.,-,_,+,,,#,$,%,~
+set laststatus=2
+set listchars=tab:»·,trail:·,eol:$,nbsp:¤
+set modeline
+set nf=alpha,hex
+set path=.,~/,/usr/include/
+set printoptions=number:y,wrap:y,paper:letter,syntax:y
+set ruler
+set rulerformat=%-80(%Y\ \ #%n\ \ %Bh\ \ %v,%l\/%L\ \ %P%)
+set scrolloff=3
+set sessionoptions=options,folds,localoptions
+set shellslash
+set shiftwidth=4
+set showcmd
+set showmatch
+set showmode
+set smarttab
+set suffixesadd=.java
+set tabstop=4
+set title
+set viminfo='50,\"1000,%,h,n~/.viminfo
+set wildignore=*.o,*.a,*.obj,*.exe,*.pyc,*.pyd
+set wildmenu
+
+" Prevent typos
+imap <F1> 1
+
+autocmd Bufread known_hosts set nowrap
+autocmd BufRead Makefile* set noet
+autocmd BufWritePost ~/.vimrc   so ~/.vimrc
+
+autocmd BufRead,BufNewFile *.java set makeprg=javac\ %
+
+map <C-W>b :sn<CR>
+map <F11> :wqall<CR>
+map <F10> :qall!<CR>
+map <F9> :wn<CR>
+map <F8> :n<CR>
+map <F7> :wall<CR>:make<CR>\es
+map <F6> :diffput<CR>
+map <F5> :diffget<CR>
+map <F4> ]c
+map <F3> :up<CR>:cn<CR>
+map <F2> :tn<CR>
+map <C-F2> :cd %:h<CR>
+map <S-F2> :set invnumber<CR>:set invlist<CR>
+
+syntax enable
+syntax on
+
+let c_space_errors=1

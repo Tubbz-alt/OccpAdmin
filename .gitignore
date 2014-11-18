@@ -3,3 +3,4 @@ doc
 lib/occp.jar
 dist
 occp/MANIFEST.MF
+*.log

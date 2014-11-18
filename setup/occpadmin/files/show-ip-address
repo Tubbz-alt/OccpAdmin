@@ -1,0 +1,16 @@
+#!/bin/bash
+# Referenced from: http://offbytwo.com/2008/05/09/show-ip-address-of-vm-as-console-pre-login-message.html
+
+if [ "$METHOD" = loopback ]; then
+  exit 0
+fi
+
+# Only run from ifup.
+if [ "$MODE" != start ]; then
+  exit 0
+fi
+
+#Referenced from: http://www.solaris-cookbook.com/linux/linux-howto-show-the-servers-ip-address-at-the-login-console/
+sed -i_bak -e '/IP/d' /etc/issue
+IPADD=`/sbin/ifconfig eth0 | sed '/Bcast/!d' | awk '{print $2}'| awk '{print $2}' FS=":"`
+echo "eth0 IP: $IPADD" >> /etc/issue
