@@ -2507,7 +2507,8 @@ public class OccpEsxiHV implements OccpHV {
                 for (HttpNfcLeaseDeviceUrl deviceUrl : deviceUrlArr) {
                     String deviceUrlStr = deviceUrl.getUrl();
                     String fileName = deviceUrlStr.substring(deviceUrlStr.lastIndexOf("/") + 1);
-                    logger.info("Downloading file name: " + fileName);
+                    logger.info("Downloading file name: " + fileName + " for the VM \"" + vm.getName()
+                            + "\" on the hypervisor \"" + this.getName() + '"');
                     logger.finest("VMDK URL: " + deviceUrlStr.replace("*", host));
                     leaseExtender.currentFile = fileName;
                     TarArchiveEntry entry = new TarArchiveEntry(fileName);
@@ -2555,7 +2556,8 @@ public class OccpEsxiHV implements OccpHV {
                 // Truncate the file
                 outputStream.setLength(outputStream.getFilePointer());
                 outputStream.close();
-                logger.info("Completed Downloading the files");
+                logger.info("Completed Downloading the files for the VM \"" + vm.getName() + "\" on the hypervisor \""
+                        + this.getName() + '"');
 
             } else {
                 logger.severe("HttpNfcLeaseState not ready");

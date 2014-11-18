@@ -2002,6 +2002,8 @@ public class OccpAdmin {
                 if (setup.connect(hv.getName())) {
                     OccpVM vm = hv.getVM(host.getLabel());
                     try {
+                        logger.info("Starting export of the VM \"" + vm.getName() + "\" from the hypervisor \""
+                                + hv.getName() + '"');
                         hv.exportVM(vm, scenarioName, exportName);
                         logger.info("Starting transfer of " + exportName);
                         setup.fetchFile(hv.getName(), scenarioName + "/Export/" + exportName,
