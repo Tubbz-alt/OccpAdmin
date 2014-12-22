@@ -8,7 +8,7 @@ class occpadmin (
 ) inherits occpadmin::params {
 
   # Ensure we are using a tested BaseVM, use others at your own risk
-  if $::operatingsystem != 'CentOS' and $::lsbdistrelease != '14.04' {
+  if ! ($::operatingsystem == 'Ubuntu' and $::lsbdistrelease == '14.04') {
     fail('This is only intended for the Ubuntu 14.04 BaseVM, this operating system not supported.')
   }
 
