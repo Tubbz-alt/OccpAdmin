@@ -16,6 +16,8 @@ _Note: Once you are satisfied that the update was successful and everything is i
 ## Contributing
 Since the Administration Utility and Admin VM are inherently linked, altering the utility may require configuration changes to the Admin VM. If that is the case, you should include changes to the occpadmin module in the setup folder as part of your pull request.
 
+This project has adopted the branching model described on http://nvie.com/posts/a-successful-git-branching-model/
+
 ## Installation
 **Stop!** This program is already installed in the OCCP Admin VM. Most users should visit the project's web site to download the Admin VM instead of trying to create their own. The following is only meant for platform developers that wish to make their own Admin VM.
 
