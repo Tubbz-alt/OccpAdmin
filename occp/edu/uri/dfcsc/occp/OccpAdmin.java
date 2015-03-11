@@ -60,7 +60,7 @@ public class OccpAdmin {
     private static String hypervisor;
     private static String hvName = "specified";
     private static final String[] Modes = new String[] { "addhv", "cleanup", "delhv", "deploy", "export", "launch",
-            "poweroff", "verify" };
+            "listhv", "poweroff", "testhv", "verify" };
     private static String modeList;
     private static String ConfigFile;
     /**
@@ -219,7 +219,9 @@ public class OccpAdmin {
         System.out.println("\tdeploy - Prepares a scenario for launch but does not turn on the VMs");
         System.out.println("\texport - Packages a scenario for distribution to OCCP users");
         System.out.println("\tlaunch - Prepares a scenario for launch and powers on the VMs");
+        System.out.println("\tlisthv - List a cached hypervisor by --hvname, or all");
         System.out.println("\tpoweroff - Power off all the VMs in a scenario");
+        System.out.println("\ttesthv - Test a cached hypervisor by --hvname, specified details, or all");
         System.out.println("\tverify - Check what would need to be done for a deploy or launch but do not act");
         System.out.println("--regen - Causes a regeneration of the VSN for deploy and launch modes");
         System.out.println("--remote - Specfies that hypervisor is not the same one that the AdminVM is running on");
@@ -357,9 +359,10 @@ public class OccpAdmin {
             throw new IllegalArgumentException("addhv requires --hvname and --hvtype");
         }
         if (runMode.equalsIgnoreCase("delhv") && hvName.equals("specified")) {
-            throw new IllegalArgumentException("delhv requires --hvname");
+            throw new IllegalArgumentException(runMode + " requires --hvname");
         }
-        if (hvName.equals("specified") && hypervisor == null && hvMap == null) {
+        if (hvName.equals("specified") && hypervisor == null && hvMap == null && !runMode.equalsIgnoreCase("listhv")
+                && !runMode.equalsIgnoreCase("testhv")) {
             throw new IllegalArgumentException("No hypervisor specified");
         }
         return unknownOptions.toArray(new String[unknownOptions.size()]);
@@ -2143,6 +2146,9 @@ public class OccpAdmin {
              */
             // @formatter:on
 
+            // Assume self-signed certs are ok
+            trustAllHttpsCertificates();
+
             // Handle the arguments
             String[] unhandledParameters = parseParameters(args);
             // This mode requires no other work
@@ -2156,8 +2162,9 @@ public class OccpAdmin {
                 }
             }
 
-            // If we aren't just saving HV information, we need a valid configuration to proceed
-            if (!runMode.equalsIgnoreCase("addhv") && !runMode.equalsIgnoreCase("delhv")) {
+            // If we aren't just dealing with HV information, we need a valid configuration to proceed
+            if (!runMode.equalsIgnoreCase("addhv") && !runMode.equalsIgnoreCase("delhv")
+                    && !runMode.equalsIgnoreCase("testhv") && !runMode.equalsIgnoreCase("listhv")) {
                 if (ConfigFile == null) {
                     logger.severe("Configuration file required (--config)");
                     exitProgram(ExitCode.SCENARIO_CONFIG_MISSING.value);
@@ -2190,10 +2197,53 @@ public class OccpAdmin {
             // Always create a map of which VMs are on which host, even if there is only one
             hv2vm = new HashMap<String, List<OccpHost>>();
             vm2hv = new HashMap<String, String>();
+            // Handle these modes separately
+            if (runMode.equalsIgnoreCase("listhv") || (runMode.equalsIgnoreCase("testhv") && hypervisor == null)) {
+                Map<String, Map<String, String>> hvDetails = OccpHVFactory.getAllHypervisors();
+                boolean entryFound = false, connectFailed = false;
+                for (Entry<String, Map<String, String>> hv : hvDetails.entrySet()) {
+                    if (hvName != null && !hvName.equals("specified") && !hv.getKey().equalsIgnoreCase(hvName)) {
+                        continue;
+                    }
+                    entryFound = true;
+                    if (runMode.equalsIgnoreCase("testhv")) {
+                        OccpHV testHv = OccpHVFactory.getOccpHVFromFile(hv.getKey(), args);
+                        if (!testHv.connect()) {
+                            logger.severe("Connection to " + hv.getKey() + " failed");
+                            connectFailed = true;
+                        }
+                    } else if (runMode.equalsIgnoreCase("listhv")) {
+                        System.out.println(hv.getKey());
+                        for (Entry<String, String> attr : hv.getValue().entrySet()) {
+                            if (attr.getKey().equalsIgnoreCase("name")) {
+                                continue;
+                            }
+                            System.out.println("\t" + attr.getKey() + ": '" + attr.getValue() + "'");
+                        }
+                    }
+                }
+                if (!entryFound) {
+                    logger.severe("No hypervisor found: " + hvName);
+                    exitProgram(ExitCode.HYPERVISOR_MAP.value);
+                }
+                if (connectFailed) {
+                    exitProgram(ExitCode.HYPERVISOR_CONNECT.value);
+                }
+                exitProgram(ExitCode.OK.value);
+            }
             // Hypervisor connection details specified on the command line
             if (hypervisor != null) {
 
                 OccpHV hv = OccpHVFactory.getOccpHVFromArgs(hvName, hypervisor, unhandledParameters);
+                // Allow testing before addhv
+                if (runMode.equals("testhv")) {
+                    if (!hv.connect()) {
+                        logger.severe("Failed to validate hypervisor connection: " + hvName);
+                        exitProgram(ExitCode.HYPERVISOR_CONNECT.value);
+                    }
+                    logger.info("Connection successful");
+                    exitProgram(ExitCode.OK.value);
+                }
                 // Save and quit if they are just caching HV information
                 if (runMode.equalsIgnoreCase("addhv")) {
                     Map<String, String> params = hv.getSaveParameters();
@@ -2241,9 +2291,6 @@ public class OccpAdmin {
                     vm2hv.put(host.getLabel(), hvName);
                 }
             }
-
-            // Assume self-signed certs are ok
-            trustAllHttpsCertificates();
 
             // Builds mappings between HV & Network and Network & HV
             buildTopologyInformation();

@@ -1011,6 +1011,10 @@ public class OccpEsxiHV implements OccpHV {
         SVC_INST_REF.setType(SVC_INST_NAME);
         SVC_INST_REF.setValue(SVC_INST_NAME);
 
+        if (!(this.url.endsWith("/sdk") || this.url.endsWith("/sdk/"))) {
+            logger.warning("VMware services URL's usually end with /sdk/");
+        }
+
         vimService = new VimService();
         vimPort = vimService.getVimPort();
         Map<String, Object> ctxt = ((BindingProvider) vimPort).getRequestContext();
@@ -1046,7 +1050,7 @@ public class OccpEsxiHV implements OccpHV {
             if (folder.endsWith("/")) {
                 folder = folder.substring(0, folder.length());
             }
-            if (!folder.endsWith(OccpAdmin.scenarioName)) {
+            if (OccpAdmin.scenarioName != null && !folder.endsWith(OccpAdmin.scenarioName)) {
                 folder = folder.concat("/" + groupName);
             }
             String[] folders = folder.split("/");
