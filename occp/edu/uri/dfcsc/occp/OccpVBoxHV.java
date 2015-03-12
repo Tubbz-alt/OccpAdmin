@@ -601,8 +601,26 @@ public class OccpVBoxHV implements OccpHV {
             List<String> groupList = new ArrayList<>();
             groupList.add(groupName);
             rwMachine.setGroups(groupList);
-            rwMachine.saveSettings();
-            return true;
+
+            boolean noError = true;
+            int retries = 0;
+            while (noError) {
+                try {
+                    rwMachine.saveSettings();
+                    return true;
+                } catch (VBoxException e) {
+                    // Rename directory error happens when another VBox thread has the vmdk open, try again
+                    if (e.getResultCode() == 0x80004005 && e.getMessage().contains("VERR_ACCESS_DENIED")) {
+                        Thread.sleep(500);
+                        ++retries;
+                        logger.finest("Retrying VM group set: " + retries + "/10");
+                        if (retries < 10) {
+                            continue;
+                        }
+                    }
+                    throw e;
+                }
+            }
         } catch (Exception e) {
             throw new VMOperationFailedException(name, vm.getName(), ErrorCode.ASSIGN_GROUP, e).set("group", groupName);
         } finally {
@@ -610,6 +628,7 @@ public class OccpVBoxHV implements OccpHV {
                 unlockMachine(oSession, rwMachine);
             }
         }
+        return false;
     }
 
     @Override
