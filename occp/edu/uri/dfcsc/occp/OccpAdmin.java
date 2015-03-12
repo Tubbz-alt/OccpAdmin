@@ -113,6 +113,11 @@ public class OccpAdmin {
     private static boolean regenFlag = false;
 
     /**
+     * Overwrite OVA files on remote VBox
+     */
+    public static boolean overwrite = false;
+
+    /**
      * A simple container for holding information about a VpnConnection
      */
     private static ConfigManagerControl configManager = null;
@@ -225,6 +230,7 @@ public class OccpAdmin {
         System.out.println("\tverify - Check what would need to be done for a deploy or launch but do not act");
         System.out.println("--regen - Causes a regeneration of the VSN for deploy and launch modes");
         System.out.println("--remote - Specfies that hypervisor is not the same one that the AdminVM is running on");
+        System.out.println("--overwriteova - Replace OVA files on remote VBox instances when deploying");
         System.out.println("--version - Displays the version for this program and the Admin VM");
         System.out.println("\nHypervisor Specific Options:");
         System.out.println(OccpVBoxHV.getUsage());
@@ -340,6 +346,9 @@ public class OccpAdmin {
                 instanceId = val;
             } else if (param.equalsIgnoreCase("--remote")) {
                 localFlag = false;
+                --ai; // No value
+            } else if (param.equalsIgnoreCase("--overwriteova")) {
+                overwrite = true;
                 --ai; // No value
             } else if (param.equalsIgnoreCase("--regen")) {
                 setRegenFlag(true);

@@ -934,6 +934,10 @@ public class OccpVBoxHV implements OccpHV {
                         "Failed to get guest session");
             }
             try {
+                // Don't overwrite OVA files unless requested to with --overwriteova
+                if (gs.fileExists(destPath) && destPath.endsWith("ova") && !OccpAdmin.overwrite) {
+                    return;
+                }
                 if (gs.fileExists(destPath)) {
                     gs.fileRemove(destPath);
                 }
