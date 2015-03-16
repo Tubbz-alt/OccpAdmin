@@ -109,7 +109,7 @@ public class OccpHVFactory {
             for (int index = 0; index < hvs.getLength(); ++index) {
                 Element hv = (Element) hvs.item(index);
                 String hvname = hv.getAttribute("name");
-                hvDetails.put(hvname, new TreeMap<>());
+                hvDetails.put(hvname, new TreeMap<String, String>());
                 NamedNodeMap nnm = hv.getAttributes();
                 for (int attr = 0; attr < nnm.getLength(); ++attr) {
                     Attr a = (Attr) nnm.item(attr);
