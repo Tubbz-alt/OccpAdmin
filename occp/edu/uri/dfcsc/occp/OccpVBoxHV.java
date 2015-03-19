@@ -278,14 +278,24 @@ public class OccpVBoxHV implements OccpHV {
     public void powerOffVM(OccpVM vm) throws OccpException {
         ISession oSession = null;
         IMachine oMachine = null;
-        if (!this.isVMOn(vm)) {
-            return;
-        }
         try {
             oMachine = ((OccpVBoxVM) vm).machine;
+            MachineState state = oMachine.getState();
+            if (state == MachineState.PoweredOff) {
+                return;
+            }
             oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
             lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Shared);
             IConsole oConsole = oSession.getConsole();
+            if (state == MachineState.Saved) {
+                if (OccpAdmin.force) {
+                    logger.finest("Discarding Saved state of " + vm.getName());
+                    oConsole.discardSavedState(true);
+                    return;
+                }
+                throw new VMOperationFailedException(name, vm.getName(), ErrorCode.POWER_OFF,
+                        "VM Has saved state, but --force not specified");
+            }
             logger.finest("Powering off " + vm.getName());
             IProgress oProgress = oConsole.powerDown();
             oProgress.waitForCompletion(-1);
@@ -1316,6 +1326,7 @@ public class OccpVBoxHV implements OccpHV {
             throw new VMOperationFailedException(name, vm.getName(), ErrorCode.DELETE_VM,
                     getVBoxErrorMessage(progress.getErrorInfo())).set("virtualbox code", progress.getResultCode());
         }
+        cachedVMs.remove(vm.getName());
     }
 
     @Override

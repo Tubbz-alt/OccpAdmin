@@ -116,6 +116,10 @@ public class OccpAdmin {
      * Overwrite OVA files on remote VBox
      */
     public static boolean overwrite = false;
+    /**
+     * Remove VMs if they are in the way and discard saved (paused) state
+     */
+    public static boolean force = false;
 
     /**
      * A simple container for holding information about a VpnConnection
@@ -231,6 +235,7 @@ public class OccpAdmin {
         System.out.println("--regen - Causes a regeneration of the VSN for deploy and launch modes");
         System.out.println("--remote - Specfies that hypervisor is not the same one that the AdminVM is running on");
         System.out.println("--overwriteova - Replace OVA files on remote VBox instances when deploying");
+        System.out.println("--force - Remove VMs if they are in the way and discard saved (paused) state");
         System.out.println("--version - Displays the version for this program and the Admin VM");
         System.out.println("\nHypervisor Specific Options:");
         System.out.println(OccpVBoxHV.getUsage());
@@ -349,6 +354,9 @@ public class OccpAdmin {
                 --ai; // No value
             } else if (param.equalsIgnoreCase("--overwriteova")) {
                 overwrite = true;
+                --ai; // No value
+            } else if (param.equalsIgnoreCase("--force")) {
+                force = true;
                 --ai; // No value
             } else if (param.equalsIgnoreCase("--regen")) {
                 setRegenFlag(true);
@@ -499,6 +507,12 @@ public class OccpAdmin {
                 }
                 return 1;
             }
+            if (OccpAdmin.force) {
+                // Treat as failed to get to phase 1, remove, if asked
+                hv.deleteVM(vm);
+                return 0;
+            }
+            logger.warning(host.getLabel() + " exists but has no snapshots. You may need to use --force to remove it.");
             return -1;
         } catch (VMNotFoundException e) {
             String isoFile = host.getIsoName();
@@ -868,10 +882,13 @@ public class OccpAdmin {
                             } else {
                                 // This machine does not have a phase 1 or 2 snapshot. Either it is a broken OCCP
                                 // machine or not an OCCP machine at all
-                                Failure = true;
-                                logger.severe("During regen it was discovered that a VM labeled  \"" + host.getLabel()
-                                        + "\" did not have any phase snapshots on the hypervisor \"" + hv.getName()
-                                        + '"');
+                                if (!OccpAdmin.force) {
+                                    Failure = true;
+                                    logger.severe("During regen it was discovered that a VM labeled  \""
+                                            + host.getLabel()
+                                            + "\" did not have any phase snapshots on the hypervisor \"" + hv.getName()
+                                            + '"');
+                                }
                             }
                         }
                     } catch (VMNotFoundException e) {
