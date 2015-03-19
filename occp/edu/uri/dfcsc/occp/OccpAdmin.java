@@ -1058,27 +1058,6 @@ public class OccpAdmin {
     }
 
     /**
-     * Format a "raw" record for dnsmasq to represent an NS record
-     * 
-     * @param zoneName - Name of the zone for delegation
-     * @param domainName - Name of the Name server
-     * @return - Formatted record
-     */
-    private static String createNSRecord(String zoneName, String domainName) {
-        StringBuilder result = new StringBuilder(zoneName);
-        result.append(",2,");
-        String[] domainParts = domainName.split("\\.");
-        for (String part : domainParts) {
-            result.append(Integer.toHexString(part.length()) + ":");
-            for (byte c : part.getBytes()) {
-                result.append(Integer.toHexString(c) + ":");
-            }
-        }
-        result.append("00");
-        return result.toString();
-    }
-
-    /**
      * Create a floppy image file for the Router
      * 
      * @param routerVM - Location of the router
@@ -1093,11 +1072,16 @@ public class OccpAdmin {
         }
         boolean Failure = false;
         // We need to setup the IP and DNS information for "public" networks
-        PrintStream autoconf, interfaces, dhcpcfg, dhcpopt, dnsmasqcfg, routercfg;
+        PrintStream autoconf, interfaces, dhcpcfg, dhcpopt, dnsmasqcfg, routercfg, namedconf, zonefile;
         try {
             autoconf = createFloppyFile(fs, "autoConfigure.sh");
             autoconf.println("cp /mnt/floppy/interfaces /etc/network/interfaces");
-            autoconf.println("cp /mnt/floppy/*.conf /etc/");
+            autoconf.println("cp /mnt/floppy/dnsmasq.conf /etc/");
+            autoconf.println("cp /mnt/floppy/dhcpd.conf /etc/");
+            autoconf.println("cp /mnt/floppy/dhcpdopts.conf /etc/");
+            autoconf.println("cp /mnt/floppy/named.conf /etc/bind");
+            autoconf.println("mkdir /etc/bind/zones");
+            autoconf.println("cp /mnt/floppy/*zone /etc/bind/zones");
             autoconf.println("/mnt/floppy/route.sh");
 
             // Using it's IP as gateway means "everything else"
@@ -1129,11 +1113,15 @@ public class OccpAdmin {
             dhcpcfg = createFloppyFile(fs, "dhcpd.conf");
             dhcpopt = createFloppyFile(fs, "dhcpdopts.conf");
             dnsmasqcfg = createFloppyFile(fs, "dnsmasq.conf");
+            namedconf = createFloppyFile(fs, "named.conf");
+            zonefile = createFloppyFile(fs, "root.zone");
 
             dnsmasqcfg.println("dhcp-hostsfile=/etc/dhcpd.conf");
             dnsmasqcfg.println("dhcp-optsfile=/etc/dhcpdopts.conf");
             // We don't want anyone stealing root names; we'll do DNS ourself
             dnsmasqcfg.println("dhcp-ignore-names");
+            // Turn off dnsmasq's DNS, so we can use BIND
+            dnsmasqcfg.println("port=0");
             // Become the root-nameserver (i.e., resolve all names locally)
             Set<String> localTlds = new HashSet<>();
             localTlds.add("arpa");
@@ -1143,42 +1131,26 @@ public class OccpAdmin {
             localTlds.add("org");
             // Log information for debug purposes
             dnsmasqcfg.println("log-dhcp");
-            dnsmasqcfg.println("log-queries");
+
+            namedconf.println("options {");
+            namedconf.println("recursion yes;");
+            namedconf.println("allow-recursion { \"any\"; };");
+            namedconf.println("};");
+            namedconf.println("zone \".\" {");
+            namedconf.println("type master;");
+            namedconf.println("file \"/etc/bind/zones/root.zone\";");
+            namedconf.println("};");
+
+            zonefile.println("$ORIGIN .");
+            zonefile.println("$TTL 3600");
+            zonefile.println("@ IN SOA a.root-servers.net. root.root.org. ( 1 43200 900 640800 10800 )");
+            zonefile.println("@ IN NS a.root-servers.net.");
+            zonefile.println("a.root-servers.net. IN A 198.41.0.4");
 
             // Generate entries for rootdns
             for (OccpDNSEntry entry : parser.dns) {
-                switch (entry.entryType) {
-                case "MX":
-                    dnsmasqcfg.println("mx-host=" + entry.entryName + "," + entry.entryValue + ",1");
-                    break;
-                case "A":
-                    // TODO: AAAA records need to be added here, too
-                    dnsmasqcfg.println("host-record=" + entry.entryName + "," + entry.entryValue);
-                    String tld = entry.entryName.substring(entry.entryName.lastIndexOf('.'));
-                    localTlds.add(tld);
-                    break;
-                case "PTR":
-                    // Note: host-record will generate a PTR record automatically
-                    dnsmasqcfg.println("ptr-record=" + entry.entryName + "," + entry.entryValue);
-                    break;
-                case "CNAME":
-                    dnsmasqcfg.println("cname=" + entry.entryName + "," + entry.entryValue);
-                    break;
-                case "TXT":
-                    dnsmasqcfg.println("txt-record=" + entry.entryName + "," + entry.entryValue);
-                    break;
-                case "SRV":
-                    // entryName should look like _service._tcp.domain.tld
-                    // entryValue should look like "ip,port,priority,weight"
-                    dnsmasqcfg.println("srv-host=" + entry.entryName + "," + entry.entryValue);
-                    break;
-                case "NS":
-                    dnsmasqcfg.println("dns-rr=" + createNSRecord(entry.entryName, entry.entryValue));
-                    break;
-                }
-            }
-            for (String tld : localTlds) {
-                dnsmasqcfg.println("local=/" + tld + "/");
+                zonefile.println(entry.entryName + ". " + entry.ttl + " " + entry.entryClass + " " + entry.entryType
+                        + " " + entry.entryValue);
             }
 
             // We also need to generate the routing table
@@ -1199,7 +1171,7 @@ public class OccpAdmin {
                     if (ip.getType() == InterfaceType.PHYSICAL) {
                         // Note that these names were generated from buildTopologyInformation
                         if (ip.getNetwork().startsWith("rtr-")) {
-                            String ifaddr = null, ifnetmask = null, ifcidr = null, ifgateway, ifrouter;
+                            String ifaddr = null, ifnetmask = null, ifgateway, ifrouter;
                             String genrouter = "12.14.16." + octet;
                             if (!ip.hasV4Address()) {
                                 ifaddr = "12.14.16." + (octet + 1);
@@ -1223,12 +1195,6 @@ public class OccpAdmin {
                                 SubnetUtils gwutil = new SubnetUtils(ifgateway, ifnetmask);
                                 ifrouter = gwutil.getInfo().getCidrSignature();
                             }
-                            // Construct a SubnetUtils so we can compute network/cidr
-                            SubnetUtils hostutil = new SubnetUtils(ifaddr, ifnetmask);
-                            SubnetUtils.SubnetInfo iphost = hostutil.getInfo();
-                            String netaddr = iphost.getNetworkAddress();
-                            SubnetUtils netutil = new SubnetUtils(netaddr, ifnetmask);
-                            ifcidr = netutil.getInfo().getCidrSignature();
                             routableIface = iFaceNumber;
                             /*
                              * routableIface is the interface we need to get the
@@ -1250,6 +1216,7 @@ public class OccpAdmin {
                             /* dhcphosts file for dnsmasq */
                             dhcpcfg.println(mac + ",set:" + host.getLabel() + "," + ifaddr);
                             dhcpopt.println("tag:" + host.getLabel() + ",option:router," + ifgateway);
+                            dhcpopt.println("tag:" + host.getLabel() + ",option:dns-server," + ifgateway);
                             dnsmasqcfg.println("dhcp-range=" + ifaddr + "," + ifaddr);
 
                             int ethIndex = 0;
@@ -1261,7 +1228,7 @@ public class OccpAdmin {
                             }
                             String ethName = "eth" + ethIndex;
 
-                            // TODO: Remove this block
+                            // Show addresses/routes during boot
                             routercfg.println("set -o xtrace");
 
                             routercfg.println("ip addr add " + ifrouter + " dev " + ethName);
@@ -1285,6 +1252,7 @@ public class OccpAdmin {
                     }
                 }
             }
+            routercfg.println("ip addr add 198.41.0.4 dev eth0");
             dhcpcfg.close();
             dhcpopt.close();
             dnsmasqcfg.close();
