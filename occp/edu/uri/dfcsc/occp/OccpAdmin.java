@@ -2413,10 +2413,12 @@ public class OccpAdmin {
                     try {
                         vpnVm = vpnHv.getVM(OccpParser.VPN_NAME);
                     } catch (VMNotFoundException e) {
-                        // We can create this one from scratch
-                        String isoPath = occpHiddenDirPath.resolve("vpn.iso").toString();
-                        setup.stageFile(vpnHv.getName(), isoPath);
-                        vpnVm = vpnHv.createVMwithISO(OccpParser.VPN_NAME, isoPath);
+                        if (!runMode.equals("verify")) {
+                            // We can create this one from scratch
+                            String isoPath = occpHiddenDirPath.resolve("vpn.iso").toString();
+                            setup.stageFile(vpnHv.getName(), isoPath);
+                            vpnVm = vpnHv.createVMwithISO(OccpParser.VPN_NAME, isoPath);
+                        }
                     }
                     if (!runMode.equals("verify")) {
                         setup.stageFile(aHvName, scenarioBaseDir.resolve(aHvName + ".img").toString());
