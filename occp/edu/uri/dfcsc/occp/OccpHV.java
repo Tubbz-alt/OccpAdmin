@@ -304,6 +304,8 @@ public interface OccpHV {
     public void deleteVM(OccpVM vm) throws OccpException;
 
     /**
+     * Remove a snapshot from a VM
+     *
      * @param vm - Handle to the VM
      * @param snapshotName - name of the snapshot to remove
      * @throws OccpException
@@ -311,6 +313,8 @@ public interface OccpHV {
     public void deleteSnapshot(OccpVM vm, String snapshotName) throws OccpException;
 
     /**
+     * Create a VM using the supposed ISO file as the boot device
+     *
      * @param vmName - Name of the machine
      * @param isoFilename - Name of the .iso file (in working directory)
      * @return Handle to the new VM
