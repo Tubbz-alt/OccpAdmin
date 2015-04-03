@@ -323,6 +323,7 @@ public class BaseVMRemoteConfig {
             // If we are doing password based authentication
             if (this.getAuthenticationMethod() == BaseVMRemoteConfig.AuthenticationMethod.PASSWORD) {
                 session.setUserInfo(this.getUserInfo());
+                session.setConfig("PreferredAuthentications", "password");
             }
         } catch (JSchException exception) {
             this.handleJSchException(exception);
