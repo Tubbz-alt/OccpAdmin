@@ -97,6 +97,7 @@ public class OccpVpnVm {
          * setup network. The openvpn configuration will add the tap device.
          */
         String[][] cmds = { { "/usr/sbin/brctl", "addbr", "br0" }, { "/usr/sbin/brctl", "addif", "br0", "eth1" },
+                { "/usr/sbin/brctl", "setfd", "br0", "4" },
                 { "/sbin/ifconfig", "br0", this.ip, "up" }, { "/sbin/ifconfig", "eth1", "up", "promisc" },
                 /* Workaround for VBox not using permissions given */
                 { "/bin/chmod", "a+x", "/etc/openvpn/up.sh" }, { "/usr/sbin/mount.vboxsf", "importdir", "/mnt" },
@@ -109,8 +110,14 @@ public class OccpVpnVm {
         hv.runCommand(this.vm, cmds[4], true);
         hv.runCommand(this.vm, cmds[5], true);
         hv.runCommand(this.vm, cmds[6], true);
-        hv.runCommand(this.vm, cmds[7], false);
+        hv.runCommand(this.vm, cmds[7], true);
+        hv.runCommand(this.vm, cmds[8], false);
         isConnected = true;
+        try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            // Generally safe to ignore, as this is just to make sure the bridge settles
+        }
         return true;
     }
 
