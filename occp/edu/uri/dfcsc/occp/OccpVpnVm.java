@@ -1,5 +1,5 @@
 /**
- * This class provides an interface to a remote setup / VPN VM 
+ * This class provides an interface to a remote setup / VPN VM
  */
 package edu.uri.dfcsc.occp;
 
@@ -97,6 +97,7 @@ public class OccpVpnVm {
          * setup network. The openvpn configuration will add the tap device.
          */
         String[][] cmds = { { "/usr/sbin/brctl", "addbr", "br0" }, { "/usr/sbin/brctl", "addif", "br0", "eth1" },
+                { "/usr/sbin/brctl", "stp", "br0", "on" }, { "/usr/sbin/brctl", "setbridgeprio", "br0", "10" },
                 { "/usr/sbin/brctl", "setfd", "br0", "4" },
                 { "/sbin/ifconfig", "br0", this.ip, "up" }, { "/sbin/ifconfig", "eth1", "up", "promisc" },
                 /* Workaround for VBox not using permissions given */
@@ -111,10 +112,12 @@ public class OccpVpnVm {
         hv.runCommand(this.vm, cmds[5], true);
         hv.runCommand(this.vm, cmds[6], true);
         hv.runCommand(this.vm, cmds[7], true);
-        hv.runCommand(this.vm, cmds[8], false);
+        hv.runCommand(this.vm, cmds[8], true);
+        hv.runCommand(this.vm, cmds[9], true);
+        hv.runCommand(this.vm, cmds[10], false);
         isConnected = true;
         try {
-            Thread.sleep(5000);
+            Thread.sleep(20000);
         } catch (InterruptedException e) {
             // Generally safe to ignore, as this is just to make sure the bridge settles
         }

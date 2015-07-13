@@ -162,6 +162,7 @@ public class SetupNetwork {
      */
     public synchronized Boolean setup() {
         String[][] cfgcmds = { { "sudo", "brctl", "addbr", "br0" }, { "sudo", "brctl", "addif", "br0", setupIface },
+                { "sudo", "brctl", "stp", "br0", "on" }, { "sudo", "brctl", "setbridgeprio", "br0", "0" },
                 { "sudo", "ifconfig", "br0", "12.14.16.1", "netmask", "255.255.0.0", "up" },
                 { "sudo", "ifconfig", setupIface, "up", "promisc" } };
         Runtime rt = Runtime.getRuntime();
