@@ -127,7 +127,7 @@ public class OccpVpnVm {
      * @param from Local file name
      * @throws OccpException
      */
-    public void stageFile(String from) throws OccpException {
+    public synchronized void stageFile(String from) throws OccpException {
         boolean transferSuccess = false;
         /*
          * Only VBox requires transfer to the host; Esxi allows uploads

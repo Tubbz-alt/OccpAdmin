@@ -321,4 +321,11 @@ public interface OccpHV {
      * @throws OccpException
      */
     public OccpVM createVMwithISO(String vmName, String isoFilename) throws OccpException;
+
+    /**
+     * Returns number of simultaneous jobs to run on this HV
+     *
+     * @return Number of simultaneous jobs to run on this HV
+     */
+    int getJobs();
 }

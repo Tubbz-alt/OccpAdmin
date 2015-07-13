@@ -37,6 +37,7 @@ public class OccpVBoxHV implements OccpHV {
     String password = null;
     String url;
     String importDir;
+    private int jobs = 1;
     IVirtualBox vbox;
     VirtualBoxManager mgr = VirtualBoxManager.createInstance(null);
     private boolean isLocal = false;
@@ -75,6 +76,9 @@ public class OccpVBoxHV implements OccpHV {
             userName = cache.get("username");
             password = cache.get("password");
             importDir = cache.get("importdir");
+            if (cache.get("jobs") != null) {
+                jobs = Integer.parseInt(cache.get("jobs"));
+            }
         }
     }
 
@@ -97,6 +101,8 @@ public class OccpVBoxHV implements OccpHV {
                 password = val;
             } else if (param.equalsIgnoreCase("--importdir") && !val.startsWith("--") && !val.isEmpty()) {
                 importDir = val;
+            } else if (param.equalsIgnoreCase("--jobs") && !val.startsWith("--") && !val.isEmpty()) {
+                jobs = Integer.parseInt(val);
             } else {
                 --ai; // Ignore this unknown parameter
             }
@@ -122,6 +128,7 @@ public class OccpVBoxHV implements OccpHV {
             params.put("password", password);
         }
         params.put("importdir", importDir);
+        params.put("jobs", "" + jobs);
         return params;
     }
 
@@ -133,6 +140,11 @@ public class OccpVBoxHV implements OccpHV {
     @Override
     public boolean getLocal() {
         return this.isLocal;
+    }
+
+    @Override
+    public int getJobs() {
+        return this.jobs;
     }
 
     @Override

@@ -125,6 +125,7 @@ public class OccpAdmin {
      * A simple container for holding information about a VpnConnection
      */
     private static ConfigManagerControl configManager = null;
+    private static Semaphore concurrency;
     static final String RTR_GS_LINK = "rtr-gs-link";
 
     /**
@@ -577,7 +578,7 @@ public class OccpAdmin {
      * @param hosts Hosts that belong on this hypervisor
      * @return
      */
-    private static boolean checkVMsOnHV(OccpHV hv, Collection<OccpHost> hosts) {
+    private static boolean checkVMsOnHV() {
         boolean Failure = false;
         boolean hasSetupNetwork = false;
 
@@ -586,6 +587,8 @@ public class OccpAdmin {
         // This will hold the list of future items in the thread pool
         // We need to lookup the future item by name
         final Map<String, Future<OccpVM>> futureitems = new TreeMap<>();
+        // These Semaphores are per hypervisor and controls number of concurrent jobs
+        final Map<String, Semaphore> hvjobs = new TreeMap<>();
 
         final class PhaseFinish implements Callable<OccpVM> {
             String vmname;
@@ -693,18 +696,25 @@ public class OccpAdmin {
             @Override
             public OccpVM call() throws Exception {
                 Thread.currentThread().setName("Import " + to);
-                if (runMode.equals("verify")) {
-                    logger.info("Would import " + to + " from " + isoFile + " on the hypervisor \"" + hv.getName()
-                            + '"');
-                    return null;
+                hvjobs.get(hv.getName()).acquire();
+                concurrency.acquire();
+                try {
+                    if (runMode.equals("verify")) {
+                        logger.info("Would import " + to + " from " + isoFile + " on the hypervisor \"" + hv.getName()
+                                + '"');
+                        return null;
+                    }
+                    logger.info("Sending " + isoFile + " to the hypervisor \"" + hv.getName() + '"');
+                    setup.stageFile(hv.getName(), isoFile);
+                    logger.info("The hypervisor: \"" + hv.getName() + "\" received " + isoFile
+                            + " and will now create the VM \"" + to + '"');
+                    hv.createVMwithISO(to, isoFile);
+                    OccpVM vm = hv.getVM(to);
+                    return vm;
+                } finally {
+                    concurrency.release();
+                    hvjobs.get(hv.getName()).release();
                 }
-                logger.info("Sending " + isoFile + " to the hypervisor \"" + hv.getName() + '"');
-                setup.stageFile(hv.getName(), isoFile);
-                logger.info("The hypervisor: \"" + hv.getName() + "\" received " + isoFile
-                        + " and will now create the VM \"" + to + '"');
-                hv.createVMwithISO(to, isoFile);
-                OccpVM vm = hv.getVM(to);
-                return vm;
             }
         }
 
@@ -726,25 +736,33 @@ public class OccpAdmin {
             @Override
             public OccpVM call() throws Exception {
                 Thread.currentThread().setName("Import " + to);
-                if (runMode.equals("verify")) {
-                    logger.info("Would import " + to + " from " + from + " on the hypervisor \"" + hv.getName() + '"');
-                    return null;
+                try {
+                    hvjobs.get(hv.getName()).acquire();
+                    concurrency.acquire();
+                    if (runMode.equals("verify")) {
+                        logger.info("Would import " + to + " from " + from + " on the hypervisor \"" + hv.getName()
+                                + '"');
+                        return null;
+                    }
+                    logger.info("Sending " + from + " to the hypervisor \"" + hv.getName() + '"');
+                    setup.stageFile(hv.getName(), scenarioBaseDir + "/" + from);
+                    logger.info("The hypervisor: \"" + hv.getName() + "\" received " + from
+                            + " and will now import it as the VM \"" + to + '"');
+                    hv.importVM(to, from);
+                    OccpVM vm = hv.getVM(to);
+                    if (phase == 1) {
+                        logger.info("Creating phase1 snapshot for the VM \"" + to + "\" on the hypervisor \""
+                                + hv.getName() + '"');
+                        hv.createSnapshot(vm, "phase1");
+                    }
+                    if (this.finish != null) {
+                        return finish.call();
+                    }
+                    return vm;
+                } finally {
+                    concurrency.release();
+                    hvjobs.get(hv.getName()).release();
                 }
-                logger.info("Sending " + from + " to the hypervisor \"" + hv.getName() + '"');
-                setup.stageFile(hv.getName(), scenarioBaseDir + "/" + from);
-                logger.info("The hypervisor: \"" + hv.getName() + "\" received " + from
-                        + " and will now import it as the VM \"" + to + '"');
-                hv.importVM(to, from);
-                OccpVM vm = hv.getVM(to);
-                if (phase == 1) {
-                    logger.info("Creating phase1 snapshot for the VM \"" + to + "\" on the hypervisor \""
-                            + hv.getName() + '"');
-                    hv.createSnapshot(vm, "phase1");
-                }
-                if (this.finish != null) {
-                    return finish.call();
-                }
-                return vm;
             }
         }
 
@@ -768,57 +786,77 @@ public class OccpAdmin {
                 boolean isBase = (phase == 0);
                 Thread.currentThread().setName("Clone " + to);
                 OccpVM fromvm = null;
-                if (futureitems.containsKey(from)) {
-                    Future<OccpVM> future = futureitems.get(from);
-                    if (future != null) {
-                        fromvm = future.get();
+                try {
+                    synchronized (futureitems) {
+                        futureitems.wait(1000);
+                    }
+                    if (futureitems.containsKey(from)) {
+                        Future<OccpVM> future = futureitems.get(from);
+                        if (future != null) {
+                            fromvm = future.get();
+                        } else {
+                            logger.severe(from + " is not ready, can not clone to \"" + to + "\" on the hypervisor \""
+                                    + hv.getName() + '"');
+                            return null;
+                        }
                     } else {
-                        logger.severe(from + " is not ready, can not clone to \"" + to + "\" on the hypervisor \""
+                        if (isBase) {
+                            fromvm = hv.getBaseVM(from);
+                        } else {
+                            fromvm = hv.getVM(from);
+                        }
+                    }
+                    // Wait until after parent VM is ready, if needed
+                    hvjobs.get(hv.getName()).acquire();
+                    concurrency.acquire();
+                    if (runMode.equals("verify")) {
+                        logger.info("Would deploy the VM \"" + to + "\" from \"" + from + "\" on the hypervisor \""
                                 + hv.getName() + '"');
                         return null;
                     }
-                } else {
+                    String snapshotBase;
                     if (isBase) {
-                        fromvm = hv.getBaseVM(from);
+                        // Base VM doesn't have phase snapshots, but needs something for linked clones
+                        snapshotBase = "linked";
                     } else {
-                        fromvm = hv.getVM(from);
+                        snapshotBase = "phase" + phase;
                     }
+                    hv.cloneVM(fromvm, to, snapshotBase);
+                    OccpVM vm = hv.getVM(to);
+                    if (phase == 1) {
+                        hv.createSnapshot(vm, "phase1");
+                    }
+                    if (finish != null) {
+                        finish.call();
+                    }
+                    return vm;
+                } finally {
+                    concurrency.release();
+                    hvjobs.get(hv.getName()).release();
                 }
-                if (runMode.equals("verify")) {
-                    logger.info("Would deploy the VM \"" + to + "\" from \"" + from + "\" on the hypervisor \""
-                            + hv.getName() + '"');
-                    return null;
-                }
-                String snapshotBase;
-                if (isBase) {
-                    // Base VM doesn't have phase snapshots, but needs something for linked clones
-                    snapshotBase = "linked";
-                } else {
-                    snapshotBase = "phase" + phase;
-                }
-                hv.cloneVM(fromvm, to, snapshotBase);
-                OccpVM vm = hv.getVM(to);
-                if (phase == 1) {
-                    hv.createSnapshot(vm, "phase1");
-                }
-                if (finish != null) {
-                    finish.call();
-                }
-                return vm;
             }
         }
         final class ExistingVM implements Callable<OccpVM> {
+            OccpHV hv;
             Callable<OccpVM> finish;
 
-            ExistingVM(Callable<OccpVM> finish_) {
+            ExistingVM(OccpHV hv_, Callable<OccpVM> finish_) {
                 this.finish = finish_;
+                this.hv = hv_;
             }
 
             @Override
             public OccpVM call() throws Exception {
                 OccpVM result = null;
-                result = finish.call();
-                return result;
+                hvjobs.get(hv.getName()).acquire();
+                concurrency.acquire();
+                try {
+                    result = finish.call();
+                    return result;
+                } finally {
+                    concurrency.release();
+                    hvjobs.get(hv.getName()).release();
+                }
             }
         }
         final class Done implements Callable<OccpVM> {
@@ -835,17 +873,21 @@ public class OccpAdmin {
         }
 
         // Ensure this exists in case we need it
-        if (!hasSetupNetwork && !hv.networkExists(setupNetworkName)) {
-            try {
-                hv.createNetwork(setupNetworkName);
-            } catch (OccpException e) {
-                logger.log(Level.SEVERE, e.getMessage(), e);
-                return false;
+        for (OccpHV hv : hvs.values()) {
+            if (!hasSetupNetwork && !hv.networkExists(setupNetworkName)) {
+                try {
+                    hv.createNetwork(setupNetworkName);
+                } catch (OccpException e) {
+                    logger.log(Level.SEVERE, e.getMessage(), e);
+                    return false;
+                }
             }
         }
         hasSetupNetwork = true;
 
+        List<OccpHost> hosts = parser.getOccpHosts();
         for (OccpHost host : hosts) {
+            OccpHV hv = hvs.get(vm2hv.get(host.getLabel()));
             try {
                 // If the regen flag is set we need to roll back all applicable machines to their phase 1 snapshots
                 // and then allow them to apply phase two. Machines without a phase 1 snapshot are not eligible for
@@ -921,7 +963,7 @@ public class OccpAdmin {
                         try {
                             // If it already exists, just apply phase 2
                             hv.getVM(host.getLabel());
-                            ExistingVM existingvm = new ExistingVM(phase2);
+                            ExistingVM existingvm = new ExistingVM(hv, phase2);
                             callables.put(host.getLabel(), existingvm);
                         } catch (VMNotFoundException e) {
                             // If this is a clone, do that, otherwise try to import it
@@ -980,8 +1022,14 @@ public class OccpAdmin {
         assert callables.size() == hosts.size() : "Missing items";
         ExecutorCompletionService<OccpVM> ecs = new ExecutorCompletionService<>(exec);
         // Tell the thread pool to execute each item. Note that intermediates must be before clones
-        for (Entry<String, Callable<OccpVM>> entry : callables.entrySet()) {
-            futureitems.put(entry.getKey(), ecs.submit(entry.getValue()));
+        for (String hvName : hvs.keySet()) {
+            hvjobs.put(hvName, new Semaphore(hvs.get(hvName).getJobs()));
+        }
+        synchronized (futureitems) {
+            for (Entry<String, Callable<OccpVM>> entry : callables.entrySet()) {
+                futureitems.put(entry.getKey(), ecs.submit(entry.getValue()));
+            }
+            futureitems.notifyAll();
         }
         int vmDoneCount = 0;
         int vmFailedCount = 0;
@@ -1016,6 +1064,7 @@ public class OccpAdmin {
 
                 if (!runMode.equals("verify")) {
                     try {
+                        OccpHV hv = hvs.get(vm2hv.get(host.getLabel()));
                         if (!host.getIntermediate() && !hv.hasSnapshot(testvm, "phase2")) {
                             logger.info("Finishing up deployment of " + hv.getName() + "/" + testvm.getName());
                             hv.assignVMNetworks(testvm, host.getPhyscialNetworkNames());
@@ -2359,20 +2408,14 @@ public class OccpAdmin {
                 failure |= !checkNetworksOnHV(hvs.get(entry.getKey()), entry.getValue());
             }
 
-            // Plus one to use a pool thread to watch the DHCP server
-            // Threads are only started as needed, but only start as many as we have
-            // cores
-            int poolSize = Runtime.getRuntime().availableProcessors();
-            String cfgPoolSize = globalConfig.getProperty("concurrency");
-            if (cfgPoolSize != null) {
-                try {
-                    poolSize = Integer.parseInt(cfgPoolSize);
-                } catch (NumberFormatException e) {
-                    logger.info("Ignoring bad concurrency setting");
-                }
+            int numJobs = 5;
+            String cfgConcurrency = globalConfig.getProperty("concurrency");
+            if (cfgConcurrency != null) {
+                numJobs = Integer.parseInt(cfgConcurrency);
             }
-            // Ensure there is at least 1 to make progress, and one for dhcp server
-            poolSize = Math.max(2, poolSize + 1);
+            concurrency = new Semaphore(numJobs);
+            // We start a thread for each VM, but limit concurrency elsewhere
+            int poolSize = parser.getOccpHosts().size();
 
             exec = (ThreadPoolExecutor) Executors.newFixedThreadPool(poolSize);
             if (!runMode.equals("verify")) {
@@ -2391,10 +2434,7 @@ public class OccpAdmin {
             if (!failure) {
                 // Ensure that the virtual machines exist where they should
                 logger.info("Beginning setup of VMs");
-                for (String name : hv2vm.keySet()) {
-                    // record failure, but don't overwrite
-                    failure |= !checkVMsOnHV(hvs.get(name), hv2vm.get(name));
-                }
+                failure |= !checkVMsOnHV();
             }
 
             if (!failure) {

@@ -64,6 +64,7 @@ public class OccpEsxiHV implements OccpHV {
 
     private final String name;
     private boolean isLocal = false;
+    private int jobs = 1;
 
     /**
      * If {@code cache} is {@code null}, then {@code parseArgs }must be called before {@code connect}
@@ -82,6 +83,9 @@ public class OccpEsxiHV implements OccpHV {
             url = cache.get("url");
             userName = cache.get("username");
             password = cache.get("password");
+            if (cache.get("jobs") != null) {
+                jobs = Integer.parseInt(cache.get("jobs"));
+            }
         }
     }
 
@@ -132,6 +136,8 @@ public class OccpEsxiHV implements OccpHV {
                 if (val.equals("vcenter")) {
                     this.isVirtualCenter = true;
                 }
+            } else if (param.equalsIgnoreCase("--jobs") && !val.startsWith("--") && !val.isEmpty()) {
+                jobs = Integer.parseInt(val);
             } else {
                 --ai; // Ignore this unknown parameter
             }
@@ -174,6 +180,7 @@ public class OccpEsxiHV implements OccpHV {
         } else {
             params.put("hypervisor", "esxi");
         }
+        params.put("jobs", "" + jobs);
         return params;
     }
 
@@ -185,6 +192,11 @@ public class OccpEsxiHV implements OccpHV {
     @Override
     public boolean getLocal() {
         return this.isLocal;
+    }
+
+    @Override
+    public int getJobs() {
+        return this.jobs;
     }
 
     @Override
