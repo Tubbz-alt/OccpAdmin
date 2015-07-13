@@ -1497,8 +1497,9 @@ public class OccpAdmin {
                 serverIP = null;
                 upshpath = fs.getPath(dir.toString(), "up.sh");
             }
+            // Force flush to sync print and println
             PrintStream conf = new PrintStream(Files.newOutputStream(fileName, StandardOpenOption.CREATE,
-                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING));
+                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), true);
             writeVPNConf(conf, vpn.ca, vpn.cp, tapName, brName, vpn.port, serverIP, upshpath.toString());
             conf.close();
             PrintStream upsh = new PrintStream(Files.newOutputStream(fs.getPath(dir.toString(), "up.sh"),
