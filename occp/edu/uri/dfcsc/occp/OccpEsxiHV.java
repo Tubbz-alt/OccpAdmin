@@ -1035,12 +1035,12 @@ public class OccpEsxiHV implements OccpHV {
         ctxt.put(BindingProvider.SESSION_MAINTAIN_PROPERTY, true);
 
         serviceContent = vimPort.retrieveServiceContent(SVC_INST_REF);
-        headers = (Map<String, Object>) ((BindingProvider) vimPort).getResponseContext().get(
-                MessageContext.HTTP_RESPONSE_HEADERS);
         if (password == null) {
             password = new String(OccpAdmin.getPassword(this.userName + "@" + this.url));
         }
         vimPort.login(serviceContent.getSessionManager(), userName, password, null);
+        headers = (Map<String, Object>) ((BindingProvider) vimPort).getResponseContext().get(
+                MessageContext.HTTP_RESPONSE_HEADERS);
         isConnected = true;
 
         propCollectorRef = serviceContent.getPropertyCollector();
