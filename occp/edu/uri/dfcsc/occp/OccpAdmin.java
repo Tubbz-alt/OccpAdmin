@@ -60,7 +60,7 @@ public class OccpAdmin {
     private static String hypervisor;
     private static String hvName = "specified";
     private static final String[] Modes = new String[] { "addhv", "cleanup", "delhv", "deploy", "export", "launch",
-            "poweroff", "verify" };
+            "listhv", "poweroff", "testhv", "verify" };
     private static String modeList;
     private static String ConfigFile;
     /**
@@ -113,9 +113,19 @@ public class OccpAdmin {
     private static boolean regenFlag = false;
 
     /**
+     * Overwrite OVA files on remote VBox
+     */
+    public static boolean overwrite = false;
+    /**
+     * Remove VMs if they are in the way and discard saved (paused) state
+     */
+    public static boolean force = false;
+
+    /**
      * A simple container for holding information about a VpnConnection
      */
     private static ConfigManagerControl configManager = null;
+    private static Semaphore concurrency;
     static final String RTR_GS_LINK = "rtr-gs-link";
 
     /**
@@ -219,10 +229,14 @@ public class OccpAdmin {
         System.out.println("\tdeploy - Prepares a scenario for launch but does not turn on the VMs");
         System.out.println("\texport - Packages a scenario for distribution to OCCP users");
         System.out.println("\tlaunch - Prepares a scenario for launch and powers on the VMs");
+        System.out.println("\tlisthv - List a cached hypervisor by --hvname, or all");
         System.out.println("\tpoweroff - Power off all the VMs in a scenario");
+        System.out.println("\ttesthv - Test a cached hypervisor by --hvname, specified details, or all");
         System.out.println("\tverify - Check what would need to be done for a deploy or launch but do not act");
         System.out.println("--regen - Causes a regeneration of the VSN for deploy and launch modes");
         System.out.println("--remote - Specfies that hypervisor is not the same one that the AdminVM is running on");
+        System.out.println("--overwriteova - Replace OVA files on remote VBox instances when deploying");
+        System.out.println("--force - Remove VMs if they are in the way and discard saved (paused) state");
         System.out.println("--version - Displays the version for this program and the Admin VM");
         System.out.println("\nHypervisor Specific Options:");
         System.out.println(OccpVBoxHV.getUsage());
@@ -339,6 +353,12 @@ public class OccpAdmin {
             } else if (param.equalsIgnoreCase("--remote")) {
                 localFlag = false;
                 --ai; // No value
+            } else if (param.equalsIgnoreCase("--overwriteova")) {
+                overwrite = true;
+                --ai; // No value
+            } else if (param.equalsIgnoreCase("--force")) {
+                force = true;
+                --ai; // No value
             } else if (param.equalsIgnoreCase("--regen")) {
                 setRegenFlag(true);
                 --ai; // No value
@@ -357,9 +377,10 @@ public class OccpAdmin {
             throw new IllegalArgumentException("addhv requires --hvname and --hvtype");
         }
         if (runMode.equalsIgnoreCase("delhv") && hvName.equals("specified")) {
-            throw new IllegalArgumentException("delhv requires --hvname");
+            throw new IllegalArgumentException(runMode + " requires --hvname");
         }
-        if (hvName.equals("specified") && hypervisor == null && hvMap == null) {
+        if (hvName.equals("specified") && hypervisor == null && hvMap == null && !runMode.equalsIgnoreCase("listhv")
+                && !runMode.equalsIgnoreCase("testhv")) {
             throw new IllegalArgumentException("No hypervisor specified");
         }
         return unknownOptions.toArray(new String[unknownOptions.size()]);
@@ -487,6 +508,12 @@ public class OccpAdmin {
                 }
                 return 1;
             }
+            if (OccpAdmin.force) {
+                // Treat as failed to get to phase 1, remove, if asked
+                hv.deleteVM(vm);
+                return 0;
+            }
+            logger.warning(host.getLabel() + " exists but has no snapshots. You may need to use --force to remove it.");
             return -1;
         } catch (VMNotFoundException e) {
             String isoFile = host.getIsoName();
@@ -551,7 +578,7 @@ public class OccpAdmin {
      * @param hosts Hosts that belong on this hypervisor
      * @return
      */
-    private static boolean checkVMsOnHV(OccpHV hv, Collection<OccpHost> hosts) {
+    private static boolean checkVMsOnHV() {
         boolean Failure = false;
         boolean hasSetupNetwork = false;
 
@@ -560,6 +587,8 @@ public class OccpAdmin {
         // This will hold the list of future items in the thread pool
         // We need to lookup the future item by name
         final Map<String, Future<OccpVM>> futureitems = new TreeMap<>();
+        // These Semaphores are per hypervisor and controls number of concurrent jobs
+        final Map<String, Semaphore> hvjobs = new TreeMap<>();
 
         final class PhaseFinish implements Callable<OccpVM> {
             String vmname;
@@ -667,18 +696,25 @@ public class OccpAdmin {
             @Override
             public OccpVM call() throws Exception {
                 Thread.currentThread().setName("Import " + to);
-                if (runMode.equals("verify")) {
-                    logger.info("Would import " + to + " from " + isoFile + " on the hypervisor \"" + hv.getName()
-                            + '"');
-                    return null;
+                hvjobs.get(hv.getName()).acquire();
+                concurrency.acquire();
+                try {
+                    if (runMode.equals("verify")) {
+                        logger.info("Would import " + to + " from " + isoFile + " on the hypervisor \"" + hv.getName()
+                                + '"');
+                        return null;
+                    }
+                    logger.info("Sending " + isoFile + " to the hypervisor \"" + hv.getName() + '"');
+                    setup.stageFile(hv.getName(), isoFile);
+                    logger.info("The hypervisor: \"" + hv.getName() + "\" received " + isoFile
+                            + " and will now create the VM \"" + to + '"');
+                    hv.createVMwithISO(to, isoFile);
+                    OccpVM vm = hv.getVM(to);
+                    return vm;
+                } finally {
+                    concurrency.release();
+                    hvjobs.get(hv.getName()).release();
                 }
-                logger.info("Sending " + isoFile + " to the hypervisor \"" + hv.getName() + '"');
-                setup.stageFile(hv.getName(), isoFile);
-                logger.info("The hypervisor: \"" + hv.getName() + "\" received " + isoFile
-                        + " and will now create the VM \"" + to + '"');
-                hv.createVMwithISO(to, isoFile);
-                OccpVM vm = hv.getVM(to);
-                return vm;
             }
         }
 
@@ -700,25 +736,33 @@ public class OccpAdmin {
             @Override
             public OccpVM call() throws Exception {
                 Thread.currentThread().setName("Import " + to);
-                if (runMode.equals("verify")) {
-                    logger.info("Would import " + to + " from " + from + " on the hypervisor \"" + hv.getName() + '"');
-                    return null;
+                try {
+                    hvjobs.get(hv.getName()).acquire();
+                    concurrency.acquire();
+                    if (runMode.equals("verify")) {
+                        logger.info("Would import " + to + " from " + from + " on the hypervisor \"" + hv.getName()
+                                + '"');
+                        return null;
+                    }
+                    logger.info("Sending " + from + " to the hypervisor \"" + hv.getName() + '"');
+                    setup.stageFile(hv.getName(), scenarioBaseDir + "/" + from);
+                    logger.info("The hypervisor: \"" + hv.getName() + "\" received " + from
+                            + " and will now import it as the VM \"" + to + '"');
+                    hv.importVM(to, from);
+                    OccpVM vm = hv.getVM(to);
+                    if (phase == 1) {
+                        logger.info("Creating phase1 snapshot for the VM \"" + to + "\" on the hypervisor \""
+                                + hv.getName() + '"');
+                        hv.createSnapshot(vm, "phase1");
+                    }
+                    if (this.finish != null) {
+                        return finish.call();
+                    }
+                    return vm;
+                } finally {
+                    concurrency.release();
+                    hvjobs.get(hv.getName()).release();
                 }
-                logger.info("Sending " + from + " to the hypervisor \"" + hv.getName() + '"');
-                setup.stageFile(hv.getName(), scenarioBaseDir + "/" + from);
-                logger.info("The hypervisor: \"" + hv.getName() + "\" received " + from
-                        + " and will now import it as the VM \"" + to + '"');
-                hv.importVM(to, from);
-                OccpVM vm = hv.getVM(to);
-                if (phase == 1) {
-                    logger.info("Creating phase1 snapshot for the VM \"" + to + "\" on the hypervisor \""
-                            + hv.getName() + '"');
-                    hv.createSnapshot(vm, "phase1");
-                }
-                if (this.finish != null) {
-                    return finish.call();
-                }
-                return vm;
             }
         }
 
@@ -742,57 +786,77 @@ public class OccpAdmin {
                 boolean isBase = (phase == 0);
                 Thread.currentThread().setName("Clone " + to);
                 OccpVM fromvm = null;
-                if (futureitems.containsKey(from)) {
-                    Future<OccpVM> future = futureitems.get(from);
-                    if (future != null) {
-                        fromvm = future.get();
+                try {
+                    synchronized (futureitems) {
+                        futureitems.wait(1000);
+                    }
+                    if (futureitems.containsKey(from)) {
+                        Future<OccpVM> future = futureitems.get(from);
+                        if (future != null) {
+                            fromvm = future.get();
+                        } else {
+                            logger.severe(from + " is not ready, can not clone to \"" + to + "\" on the hypervisor \""
+                                    + hv.getName() + '"');
+                            return null;
+                        }
                     } else {
-                        logger.severe(from + " is not ready, can not clone to \"" + to + "\" on the hypervisor \""
+                        if (isBase) {
+                            fromvm = hv.getBaseVM(from);
+                        } else {
+                            fromvm = hv.getVM(from);
+                        }
+                    }
+                    // Wait until after parent VM is ready, if needed
+                    hvjobs.get(hv.getName()).acquire();
+                    concurrency.acquire();
+                    if (runMode.equals("verify")) {
+                        logger.info("Would deploy the VM \"" + to + "\" from \"" + from + "\" on the hypervisor \""
                                 + hv.getName() + '"');
                         return null;
                     }
-                } else {
+                    String snapshotBase;
                     if (isBase) {
-                        fromvm = hv.getBaseVM(from);
+                        // Base VM doesn't have phase snapshots, but needs something for linked clones
+                        snapshotBase = "linked";
                     } else {
-                        fromvm = hv.getVM(from);
+                        snapshotBase = "phase" + phase;
                     }
+                    hv.cloneVM(fromvm, to, snapshotBase);
+                    OccpVM vm = hv.getVM(to);
+                    if (phase == 1) {
+                        hv.createSnapshot(vm, "phase1");
+                    }
+                    if (finish != null) {
+                        finish.call();
+                    }
+                    return vm;
+                } finally {
+                    concurrency.release();
+                    hvjobs.get(hv.getName()).release();
                 }
-                if (runMode.equals("verify")) {
-                    logger.info("Would deploy the VM \"" + to + "\" from \"" + from + "\" on the hypervisor \""
-                            + hv.getName() + '"');
-                    return null;
-                }
-                String snapshotBase;
-                if (isBase) {
-                    // Base VM doesn't have phase snapshots, but needs something for linked clones
-                    snapshotBase = "linked";
-                } else {
-                    snapshotBase = "phase" + phase;
-                }
-                hv.cloneVM(fromvm, to, snapshotBase);
-                OccpVM vm = hv.getVM(to);
-                if (phase == 1) {
-                    hv.createSnapshot(vm, "phase1");
-                }
-                if (finish != null) {
-                    finish.call();
-                }
-                return vm;
             }
         }
         final class ExistingVM implements Callable<OccpVM> {
+            OccpHV hv;
             Callable<OccpVM> finish;
 
-            ExistingVM(Callable<OccpVM> finish_) {
+            ExistingVM(OccpHV hv_, Callable<OccpVM> finish_) {
                 this.finish = finish_;
+                this.hv = hv_;
             }
 
             @Override
             public OccpVM call() throws Exception {
                 OccpVM result = null;
-                result = finish.call();
-                return result;
+                hvjobs.get(hv.getName()).acquire();
+                concurrency.acquire();
+                try {
+                    result = finish.call();
+                    return result;
+                } finally {
+                    concurrency.release();
+                    hvjobs.get(hv.getName()).release();
+                }
             }
         }
         final class Done implements Callable<OccpVM> {
@@ -809,17 +873,21 @@ public class OccpAdmin {
         }
 
         // Ensure this exists in case we need it
-        if (!hasSetupNetwork && !hv.networkExists(setupNetworkName)) {
-            try {
-                hv.createNetwork(setupNetworkName);
-            } catch (OccpException e) {
-                logger.log(Level.SEVERE, e.getMessage(), e);
-                return false;
+        for (OccpHV hv : hvs.values()) {
+            if (!hasSetupNetwork && !hv.networkExists(setupNetworkName)) {
+                try {
+                    hv.createNetwork(setupNetworkName);
+                } catch (OccpException e) {
+                    logger.log(Level.SEVERE, e.getMessage(), e);
+                    return false;
+                }
             }
         }
         hasSetupNetwork = true;
 
+        List<OccpHost> hosts = parser.getOccpHosts();
         for (OccpHost host : hosts) {
+            OccpHV hv = hvs.get(vm2hv.get(host.getLabel()));
             try {
                 // If the regen flag is set we need to roll back all applicable machines to their phase 1 snapshots
                 // and then allow them to apply phase two. Machines without a phase 1 snapshot are not eligible for
@@ -856,10 +924,13 @@ public class OccpAdmin {
                             } else {
                                 // This machine does not have a phase 1 or 2 snapshot. Either it is a broken OCCP
                                 // machine or not an OCCP machine at all
-                                Failure = true;
-                                logger.severe("During regen it was discovered that a VM labeled  \"" + host.getLabel()
-                                        + "\" did not have any phase snapshots on the hypervisor \"" + hv.getName()
-                                        + '"');
+                                if (!OccpAdmin.force) {
+                                    Failure = true;
+                                    logger.severe("During regen it was discovered that a VM labeled  \""
+                                            + host.getLabel()
+                                            + "\" did not have any phase snapshots on the hypervisor \"" + hv.getName()
+                                            + '"');
+                                }
                             }
                         }
                     } catch (VMNotFoundException e) {
@@ -892,7 +963,7 @@ public class OccpAdmin {
                         try {
                             // If it already exists, just apply phase 2
                             hv.getVM(host.getLabel());
-                            ExistingVM existingvm = new ExistingVM(phase2);
+                            ExistingVM existingvm = new ExistingVM(hv, phase2);
                             callables.put(host.getLabel(), existingvm);
                         } catch (VMNotFoundException e) {
                             // If this is a clone, do that, otherwise try to import it
@@ -951,8 +1022,14 @@ public class OccpAdmin {
         assert callables.size() == hosts.size() : "Missing items";
         ExecutorCompletionService<OccpVM> ecs = new ExecutorCompletionService<>(exec);
         // Tell the thread pool to execute each item. Note that intermediates must be before clones
-        for (Entry<String, Callable<OccpVM>> entry : callables.entrySet()) {
-            futureitems.put(entry.getKey(), ecs.submit(entry.getValue()));
+        for (String hvName : hvs.keySet()) {
+            hvjobs.put(hvName, new Semaphore(hvs.get(hvName).getJobs()));
+        }
+        synchronized (futureitems) {
+            for (Entry<String, Callable<OccpVM>> entry : callables.entrySet()) {
+                futureitems.put(entry.getKey(), ecs.submit(entry.getValue()));
+            }
+            futureitems.notifyAll();
         }
         int vmDoneCount = 0;
         int vmFailedCount = 0;
@@ -987,6 +1064,7 @@ public class OccpAdmin {
 
                 if (!runMode.equals("verify")) {
                     try {
+                        OccpHV hv = hvs.get(vm2hv.get(host.getLabel()));
                         if (!host.getIntermediate() && !hv.hasSnapshot(testvm, "phase2")) {
                             logger.info("Finishing up deployment of " + hv.getName() + "/" + testvm.getName());
                             hv.assignVMNetworks(testvm, host.getPhyscialNetworkNames());
@@ -1029,27 +1107,6 @@ public class OccpAdmin {
     }
 
     /**
-     * Format a "raw" record for dnsmasq to represent an NS record
-     * 
-     * @param zoneName - Name of the zone for delegation
-     * @param domainName - Name of the Name server
-     * @return - Formatted record
-     */
-    private static String createNSRecord(String zoneName, String domainName) {
-        StringBuilder result = new StringBuilder(zoneName);
-        result.append(",2,");
-        String[] domainParts = domainName.split("\\.");
-        for (String part : domainParts) {
-            result.append(Integer.toHexString(part.length()) + ":");
-            for (byte c : part.getBytes()) {
-                result.append(Integer.toHexString(c) + ":");
-            }
-        }
-        result.append("00");
-        return result.toString();
-    }
-
-    /**
      * Create a floppy image file for the Router
      * 
      * @param routerVM - Location of the router
@@ -1064,11 +1121,16 @@ public class OccpAdmin {
         }
         boolean Failure = false;
         // We need to setup the IP and DNS information for "public" networks
-        PrintStream autoconf, interfaces, dhcpcfg, dhcpopt, dnsmasqcfg, routercfg;
+        PrintStream autoconf, interfaces, dhcpcfg, dhcpopt, dnsmasqcfg, routercfg, namedconf, zonefile;
         try {
             autoconf = createFloppyFile(fs, "autoConfigure.sh");
             autoconf.println("cp /mnt/floppy/interfaces /etc/network/interfaces");
-            autoconf.println("cp /mnt/floppy/*.conf /etc/");
+            autoconf.println("cp /mnt/floppy/dnsmasq.conf /etc/");
+            autoconf.println("cp /mnt/floppy/dhcpd.conf /etc/");
+            autoconf.println("cp /mnt/floppy/dhcpdopts.conf /etc/");
+            autoconf.println("cp /mnt/floppy/named.conf /etc/bind");
+            autoconf.println("mkdir /etc/bind/zones");
+            autoconf.println("cp /mnt/floppy/*zone /etc/bind/zones");
             autoconf.println("/mnt/floppy/route.sh");
 
             // Using it's IP as gateway means "everything else"
@@ -1100,11 +1162,15 @@ public class OccpAdmin {
             dhcpcfg = createFloppyFile(fs, "dhcpd.conf");
             dhcpopt = createFloppyFile(fs, "dhcpdopts.conf");
             dnsmasqcfg = createFloppyFile(fs, "dnsmasq.conf");
+            namedconf = createFloppyFile(fs, "named.conf");
+            zonefile = createFloppyFile(fs, "root.zone");
 
             dnsmasqcfg.println("dhcp-hostsfile=/etc/dhcpd.conf");
             dnsmasqcfg.println("dhcp-optsfile=/etc/dhcpdopts.conf");
             // We don't want anyone stealing root names; we'll do DNS ourself
             dnsmasqcfg.println("dhcp-ignore-names");
+            // Turn off dnsmasq's DNS, so we can use BIND
+            dnsmasqcfg.println("port=0");
             // Become the root-nameserver (i.e., resolve all names locally)
             Set<String> localTlds = new HashSet<>();
             localTlds.add("arpa");
@@ -1114,42 +1180,26 @@ public class OccpAdmin {
             localTlds.add("org");
             // Log information for debug purposes
             dnsmasqcfg.println("log-dhcp");
-            dnsmasqcfg.println("log-queries");
+
+            namedconf.println("options {");
+            namedconf.println("recursion yes;");
+            namedconf.println("allow-recursion { \"any\"; };");
+            namedconf.println("};");
+            namedconf.println("zone \".\" {");
+            namedconf.println("type master;");
+            namedconf.println("file \"/etc/bind/zones/root.zone\";");
+            namedconf.println("};");
+
+            zonefile.println("$ORIGIN .");
+            zonefile.println("$TTL 3600");
+            zonefile.println("@ IN SOA a.root-servers.net. root.root.org. ( 1 43200 900 640800 10800 )");
+            zonefile.println("@ IN NS a.root-servers.net.");
+            zonefile.println("a.root-servers.net. IN A 198.41.0.4");
 
             // Generate entries for rootdns
             for (OccpDNSEntry entry : parser.dns) {
-                switch (entry.entryType) {
-                case "MX":
-                    dnsmasqcfg.println("mx-host=" + entry.entryName + "," + entry.entryValue + ",1");
-                    break;
-                case "A":
-                    // TODO: AAAA records need to be added here, too
-                    dnsmasqcfg.println("host-record=" + entry.entryName + "," + entry.entryValue);
-                    String tld = entry.entryName.substring(entry.entryName.lastIndexOf('.'));
-                    localTlds.add(tld);
-                    break;
-                case "PTR":
-                    // Note: host-record will generate a PTR record automatically
-                    dnsmasqcfg.println("ptr-record=" + entry.entryName + "," + entry.entryValue);
-                    break;
-                case "CNAME":
-                    dnsmasqcfg.println("cname=" + entry.entryName + "," + entry.entryValue);
-                    break;
-                case "TXT":
-                    dnsmasqcfg.println("txt-record=" + entry.entryName + "," + entry.entryValue);
-                    break;
-                case "SRV":
-                    // entryName should look like _service._tcp.domain.tld
-                    // entryValue should look like "ip,port,priority,weight"
-                    dnsmasqcfg.println("srv-host=" + entry.entryName + "," + entry.entryValue);
-                    break;
-                case "NS":
-                    dnsmasqcfg.println("dns-rr=" + createNSRecord(entry.entryName, entry.entryValue));
-                    break;
-                }
-            }
-            for (String tld : localTlds) {
-                dnsmasqcfg.println("local=/" + tld + "/");
+                zonefile.println(entry.entryName + ". " + entry.ttl + " " + entry.entryClass + " " + entry.entryType
+                        + " " + entry.entryValue);
             }
 
             // We also need to generate the routing table
@@ -1170,7 +1220,7 @@ public class OccpAdmin {
                     if (ip.getType() == InterfaceType.PHYSICAL) {
                         // Note that these names were generated from buildTopologyInformation
                         if (ip.getNetwork().startsWith("rtr-")) {
-                            String ifaddr = null, ifnetmask = null, ifcidr = null, ifgateway, ifrouter;
+                            String ifaddr = null, ifnetmask = null, ifgateway, ifrouter;
                             String genrouter = "12.14.16." + octet;
                             if (!ip.hasV4Address()) {
                                 ifaddr = "12.14.16." + (octet + 1);
@@ -1194,12 +1244,6 @@ public class OccpAdmin {
                                 SubnetUtils gwutil = new SubnetUtils(ifgateway, ifnetmask);
                                 ifrouter = gwutil.getInfo().getCidrSignature();
                             }
-                            // Construct a SubnetUtils so we can compute network/cidr
-                            SubnetUtils hostutil = new SubnetUtils(ifaddr, ifnetmask);
-                            SubnetUtils.SubnetInfo iphost = hostutil.getInfo();
-                            String netaddr = iphost.getNetworkAddress();
-                            SubnetUtils netutil = new SubnetUtils(netaddr, ifnetmask);
-                            ifcidr = netutil.getInfo().getCidrSignature();
                             routableIface = iFaceNumber;
                             /*
                              * routableIface is the interface we need to get the
@@ -1221,6 +1265,7 @@ public class OccpAdmin {
                             /* dhcphosts file for dnsmasq */
                             dhcpcfg.println(mac + ",set:" + host.getLabel() + "," + ifaddr);
                             dhcpopt.println("tag:" + host.getLabel() + ",option:router," + ifgateway);
+                            dhcpopt.println("tag:" + host.getLabel() + ",option:dns-server," + ifgateway);
                             dnsmasqcfg.println("dhcp-range=" + ifaddr + "," + ifaddr);
 
                             int ethIndex = 0;
@@ -1232,7 +1277,7 @@ public class OccpAdmin {
                             }
                             String ethName = "eth" + ethIndex;
 
-                            // TODO: Remove this block
+                            // Show addresses/routes during boot
                             routercfg.println("set -o xtrace");
 
                             routercfg.println("ip addr add " + ifrouter + " dev " + ethName);
@@ -1256,6 +1301,7 @@ public class OccpAdmin {
                     }
                 }
             }
+            routercfg.println("ip addr add 198.41.0.4 dev eth0");
             dhcpcfg.close();
             dhcpopt.close();
             dnsmasqcfg.close();
@@ -1451,8 +1497,9 @@ public class OccpAdmin {
                 serverIP = null;
                 upshpath = fs.getPath(dir.toString(), "up.sh");
             }
+            // Force flush to sync print and println
             PrintStream conf = new PrintStream(Files.newOutputStream(fileName, StandardOpenOption.CREATE,
-                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING));
+                    StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), true);
             writeVPNConf(conf, vpn.ca, vpn.cp, tapName, brName, vpn.port, serverIP, upshpath.toString());
             conf.close();
             PrintStream upsh = new PrintStream(Files.newOutputStream(fs.getPath(dir.toString(), "up.sh"),
@@ -2143,6 +2190,9 @@ public class OccpAdmin {
              */
             // @formatter:on
 
+            // Assume self-signed certs are ok
+            trustAllHttpsCertificates();
+
             // Handle the arguments
             String[] unhandledParameters = parseParameters(args);
             // This mode requires no other work
@@ -2156,8 +2206,9 @@ public class OccpAdmin {
                 }
             }
 
-            // If we aren't just saving HV information, we need a valid configuration to proceed
-            if (!runMode.equalsIgnoreCase("addhv") && !runMode.equalsIgnoreCase("delhv")) {
+            // If we aren't just dealing with HV information, we need a valid configuration to proceed
+            if (!runMode.equalsIgnoreCase("addhv") && !runMode.equalsIgnoreCase("delhv")
+                    && !runMode.equalsIgnoreCase("testhv") && !runMode.equalsIgnoreCase("listhv")) {
                 if (ConfigFile == null) {
                     logger.severe("Configuration file required (--config)");
                     exitProgram(ExitCode.SCENARIO_CONFIG_MISSING.value);
@@ -2190,10 +2241,53 @@ public class OccpAdmin {
             // Always create a map of which VMs are on which host, even if there is only one
             hv2vm = new HashMap<String, List<OccpHost>>();
             vm2hv = new HashMap<String, String>();
+            // Handle these modes separately
+            if (runMode.equalsIgnoreCase("listhv") || (runMode.equalsIgnoreCase("testhv") && hypervisor == null)) {
+                Map<String, Map<String, String>> hvDetails = OccpHVFactory.getAllHypervisors();
+                boolean entryFound = false, connectFailed = false;
+                for (Entry<String, Map<String, String>> hv : hvDetails.entrySet()) {
+                    if (hvName != null && !hvName.equals("specified") && !hv.getKey().equalsIgnoreCase(hvName)) {
+                        continue;
+                    }
+                    entryFound = true;
+                    if (runMode.equalsIgnoreCase("testhv")) {
+                        OccpHV testHv = OccpHVFactory.getOccpHVFromFile(hv.getKey(), args);
+                        if (!testHv.connect()) {
+                            logger.severe("Connection to " + hv.getKey() + " failed");
+                            connectFailed = true;
+                        }
+                    } else if (runMode.equalsIgnoreCase("listhv")) {
+                        System.out.println(hv.getKey());
+                        for (Entry<String, String> attr : hv.getValue().entrySet()) {
+                            if (attr.getKey().equalsIgnoreCase("name")) {
+                                continue;
+                            }
+                            System.out.println("\t" + attr.getKey() + ": '" + attr.getValue() + "'");
+                        }
+                    }
+                }
+                if (!entryFound) {
+                    logger.severe("No hypervisor found: " + hvName);
+                    exitProgram(ExitCode.HYPERVISOR_MAP.value);
+                }
+                if (connectFailed) {
+                    exitProgram(ExitCode.HYPERVISOR_CONNECT.value);
+                }
+                exitProgram(ExitCode.OK.value);
+            }
             // Hypervisor connection details specified on the command line
             if (hypervisor != null) {
 
                 OccpHV hv = OccpHVFactory.getOccpHVFromArgs(hvName, hypervisor, unhandledParameters);
+                // Allow testing before addhv
+                if (runMode.equals("testhv")) {
+                    if (!hv.connect()) {
+                        logger.severe("Failed to validate hypervisor connection: " + hvName);
+                        exitProgram(ExitCode.HYPERVISOR_CONNECT.value);
+                    }
+                    logger.info("Connection successful");
+                    exitProgram(ExitCode.OK.value);
+                }
                 // Save and quit if they are just caching HV information
                 if (runMode.equalsIgnoreCase("addhv")) {
                     Map<String, String> params = hv.getSaveParameters();
@@ -2241,9 +2335,6 @@ public class OccpAdmin {
                     vm2hv.put(host.getLabel(), hvName);
                 }
             }
-
-            // Assume self-signed certs are ok
-            trustAllHttpsCertificates();
 
             // Builds mappings between HV & Network and Network & HV
             buildTopologyInformation();
@@ -2318,20 +2409,14 @@ public class OccpAdmin {
                 failure |= !checkNetworksOnHV(hvs.get(entry.getKey()), entry.getValue());
             }
 
-            // Plus one to use a pool thread to watch the DHCP server
-            // Threads are only started as needed, but only start as many as we have
-            // cores
-            int poolSize = Runtime.getRuntime().availableProcessors();
-            String cfgPoolSize = globalConfig.getProperty("concurrency");
-            if (cfgPoolSize != null) {
-                try {
-                    poolSize = Integer.parseInt(cfgPoolSize);
-                } catch (NumberFormatException e) {
-                    logger.info("Ignoring bad concurrency setting");
-                }
+            int numJobs = 5;
+            String cfgConcurrency = globalConfig.getProperty("concurrency");
+            if (cfgConcurrency != null) {
+                numJobs = Integer.parseInt(cfgConcurrency);
             }
-            // Ensure there is at least 1 to make progress, and one for dhcp server
-            poolSize = Math.max(2, poolSize + 1);
+            concurrency = new Semaphore(numJobs);
+            // We start a thread for each VM, but limit concurrency elsewhere
+            int poolSize = parser.getOccpHosts().size();
 
             exec = (ThreadPoolExecutor) Executors.newFixedThreadPool(poolSize);
             if (!runMode.equals("verify")) {
@@ -2350,10 +2435,7 @@ public class OccpAdmin {
             if (!failure) {
                 // Ensure that the virtual machines exist where they should
                 logger.info("Beginning setup of VMs");
-                for (String name : hv2vm.keySet()) {
-                    // record failure, but don't overwrite
-                    failure |= !checkVMsOnHV(hvs.get(name), hv2vm.get(name));
-                }
+                failure |= !checkVMsOnHV();
             }
 
             if (!failure) {
@@ -2372,10 +2454,12 @@ public class OccpAdmin {
                     try {
                         vpnVm = vpnHv.getVM(OccpParser.VPN_NAME);
                     } catch (VMNotFoundException e) {
-                        // We can create this one from scratch
-                        String isoPath = occpHiddenDirPath.resolve("vpn.iso").toString();
-                        setup.stageFile(vpnHv.getName(), isoPath);
-                        vpnVm = vpnHv.createVMwithISO(OccpParser.VPN_NAME, isoPath);
+                        if (!runMode.equals("verify")) {
+                            // We can create this one from scratch
+                            String isoPath = occpHiddenDirPath.resolve("vpn.iso").toString();
+                            setup.stageFile(vpnHv.getName(), isoPath);
+                            vpnVm = vpnHv.createVMwithISO(OccpParser.VPN_NAME, isoPath);
+                        }
                     }
                     if (!runMode.equals("verify")) {
                         setup.stageFile(aHvName, scenarioBaseDir.resolve(aHvName + ".img").toString());

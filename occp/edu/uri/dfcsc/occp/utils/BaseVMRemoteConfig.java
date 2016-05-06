@@ -323,6 +323,7 @@ public class BaseVMRemoteConfig {
             // If we are doing password based authentication
             if (this.getAuthenticationMethod() == BaseVMRemoteConfig.AuthenticationMethod.PASSWORD) {
                 session.setUserInfo(this.getUserInfo());
+                session.setConfig("PreferredAuthentications", "password");
             }
         } catch (JSchException exception) {
             this.handleJSchException(exception);
@@ -398,9 +399,7 @@ public class BaseVMRemoteConfig {
     public CommandOutput sendCommand(String primaryCommand, String secondaryCommand) throws ConfigManagerException {
         CommandOutput result = null;
 
-        // We may need up to two sessions
         Session session = this.establishSession();
-        session = this.establishSession();
 
         ChannelExec channel = null;
 
@@ -408,7 +407,7 @@ public class BaseVMRemoteConfig {
             // Connect to our session(s)
             session.connect();
 
-            // Try and open a ChannelExec channel for our primary command on the first session
+            // Try and open a ChannelExec channel for our primary command
             channel = (ChannelExec) session.openChannel("exec");
             // Capture the output of the primary command
             result = this.execute(primaryCommand, channel);
@@ -416,7 +415,7 @@ public class BaseVMRemoteConfig {
             channel.disconnect();
 
             if (secondaryCommand != null) {
-                // Try and open a ChannelExec channel for the secondary command on the second session
+                // Try and open a ChannelExec channel for the secondary command
                 channel = (ChannelExec) session.openChannel("exec");
                 // Execute the secondary command
                 this.execute(secondaryCommand, channel);

@@ -64,6 +64,7 @@ public class OccpEsxiHV implements OccpHV {
 
     private final String name;
     private boolean isLocal = false;
+    private int jobs = 1;
 
     /**
      * If {@code cache} is {@code null}, then {@code parseArgs }must be called before {@code connect}
@@ -82,6 +83,9 @@ public class OccpEsxiHV implements OccpHV {
             url = cache.get("url");
             userName = cache.get("username");
             password = cache.get("password");
+            if (cache.get("jobs") != null) {
+                jobs = Integer.parseInt(cache.get("jobs"));
+            }
         }
     }
 
@@ -132,6 +136,8 @@ public class OccpEsxiHV implements OccpHV {
                 if (val.equals("vcenter")) {
                     this.isVirtualCenter = true;
                 }
+            } else if (param.equalsIgnoreCase("--jobs") && !val.startsWith("--") && !val.isEmpty()) {
+                jobs = Integer.parseInt(val);
             } else {
                 --ai; // Ignore this unknown parameter
             }
@@ -174,6 +180,7 @@ public class OccpEsxiHV implements OccpHV {
         } else {
             params.put("hypervisor", "esxi");
         }
+        params.put("jobs", "" + jobs);
         return params;
     }
 
@@ -185,6 +192,11 @@ public class OccpEsxiHV implements OccpHV {
     @Override
     public boolean getLocal() {
         return this.isLocal;
+    }
+
+    @Override
+    public int getJobs() {
+        return this.jobs;
     }
 
     @Override
@@ -1011,6 +1023,10 @@ public class OccpEsxiHV implements OccpHV {
         SVC_INST_REF.setType(SVC_INST_NAME);
         SVC_INST_REF.setValue(SVC_INST_NAME);
 
+        if (!(this.url.endsWith("/sdk") || this.url.endsWith("/sdk/"))) {
+            logger.warning("VMware services URL's usually end with /sdk/");
+        }
+
         vimService = new VimService();
         vimPort = vimService.getVimPort();
         Map<String, Object> ctxt = ((BindingProvider) vimPort).getRequestContext();
@@ -1019,12 +1035,12 @@ public class OccpEsxiHV implements OccpHV {
         ctxt.put(BindingProvider.SESSION_MAINTAIN_PROPERTY, true);
 
         serviceContent = vimPort.retrieveServiceContent(SVC_INST_REF);
-        headers = (Map<String, Object>) ((BindingProvider) vimPort).getResponseContext().get(
-                MessageContext.HTTP_RESPONSE_HEADERS);
         if (password == null) {
             password = new String(OccpAdmin.getPassword(this.userName + "@" + this.url));
         }
         vimPort.login(serviceContent.getSessionManager(), userName, password, null);
+        headers = (Map<String, Object>) ((BindingProvider) vimPort).getResponseContext().get(
+                MessageContext.HTTP_RESPONSE_HEADERS);
         isConnected = true;
 
         propCollectorRef = serviceContent.getPropertyCollector();
@@ -1046,7 +1062,7 @@ public class OccpEsxiHV implements OccpHV {
             if (folder.endsWith("/")) {
                 folder = folder.substring(0, folder.length());
             }
-            if (!folder.endsWith(OccpAdmin.scenarioName)) {
+            if (OccpAdmin.scenarioName != null && !folder.endsWith(OccpAdmin.scenarioName)) {
                 folder = folder.concat("/" + groupName);
             }
             String[] folders = folder.split("/");

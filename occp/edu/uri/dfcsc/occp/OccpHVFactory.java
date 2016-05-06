@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.TreeMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -88,6 +89,48 @@ public class OccpHVFactory {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Return all the details of all the hypervisors as a two level map
+     *
+     * @return Hypervisor details
+     */
+    public static Map<String, Map<String, String>> getAllHypervisors() {
+        Document doc;
+        Map<String, Map<String, String>> hvDetails = new TreeMap<>();
+        try {
+            DocumentBuilderFactory dBF = DocumentBuilderFactory.newInstance();
+            DocumentBuilder docBuilder = dBF.newDocumentBuilder();
+            // Read the current file and append
+            doc = docBuilder.parse(hvFileName);
+            doc.getDocumentElement().normalize();
+            NodeList hvs = doc.getElementsByTagName("hypervisor");
+            for (int index = 0; index < hvs.getLength(); ++index) {
+                Element hv = (Element) hvs.item(index);
+                String hvname = hv.getAttribute("name");
+                hvDetails.put(hvname, new TreeMap<String, String>());
+                NamedNodeMap nnm = hv.getAttributes();
+                for (int attr = 0; attr < nnm.getLength(); ++attr) {
+                    Attr a = (Attr) nnm.item(attr);
+                    hvDetails.get(hvname).put(a.getName(), a.getValue());
+                }
+            }
+        } catch (SAXException e) {
+            // Leave it to the user to figure out what went wrong
+            logger.log(Level.SEVERE, "Could not read stored hypervisor information (invalid)" + hvFileName, e);
+            return null;
+        } catch (FileNotFoundException e) {
+            logger.severe("No stored hypervisor information found: " + hvFileName);
+            return null;
+        } catch (IOException e) {
+            logger.log(Level.SEVERE, "Could not read stored hypervisor information " + hvFileName, e);
+            return null;
+        } catch (ParserConfigurationException e) {
+            logger.log(Level.SEVERE, "Could not read stored hypervisor information (Parser)", e);
+            return null;
+        }
+        return hvDetails;
     }
 
     private static boolean getCachedHypervsior(String hvname, Map<String, String> attributes) {
