@@ -29,7 +29,7 @@
         <manifest file="${src}/MANIFEST.MF">
             <attribute name="Built-By" value="${user.name}"/>
             <attribute name="Main-Class" value="edu.uri.dfcsc.occp.OccpAdmin"/>
-            <attribute name="Class-Path" value="bcpkix-jdk15on-149.jar bcprov-jdk15on-149.jar commons-codec-1.9.jar commons-compress-1.6.jar commons-io-2.4.jar commons-lang.jar commons-net.jar commons-validator-1.4.0.jar fat32-lib-0.7-SNAPSHOT.jar jsch-0.1.50.jar log4j.jar vboxjws-4.3.jar vim25.jar"/>
+            <attribute name="Class-Path" value="bcpkix-jdk15on-149.jar bcprov-jdk15on-149.jar commons-codec-1.9.jar commons-compress-1.6.jar commons-io-2.4.jar commons-lang.jar commons-net.jar commons-validator-1.4.0.jar fat32-lib-0.7-SNAPSHOT.jar jsch-0.1.50.jar log4j.jar vboxjws-5.0.jar vim25.jar"/>
         </manifest>
     </target>
 

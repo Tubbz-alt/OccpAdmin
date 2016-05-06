@@ -12,7 +12,7 @@ import java.util.logging.Logger;
 
 import org.apache.commons.lang.RandomStringUtils;
 import org.apache.commons.lang.StringUtils;
-import org.virtualbox_4_3.*;
+import org.virtualbox_5_0.*;
 
 import edu.uri.dfcsc.occp.exceptions.OccpException;
 import edu.uri.dfcsc.occp.exceptions.vm.HVOperationFailedException;
@@ -54,8 +54,15 @@ public class OccpVBoxHV implements OccpHV {
     public static class OccpVBoxVM implements OccpHV.OccpVM {
         IMachine machine;
         VirtualBoxManager vmMgr;
+        ISession session;
         String name;
 
+        public ISession getSession() {
+            if (session == null) {
+                session = vmMgr.getSessionObject();
+            }
+            return session;
+        }
         @Override
         public String getName() {
             return this.name;
@@ -158,9 +165,6 @@ public class OccpVBoxHV implements OccpHV {
                 password = new String(promptedPassword);
             }
             mgr.connect(url, userName, password);
-            // Although it would be nice if we could blank this, we may need
-            // more than one connection
-            // password.replaceAll(".", ".");
             vbox = mgr.getVBox();
             if (vbox == null) {
                 return false;
@@ -203,6 +207,7 @@ public class OccpVBoxHV implements OccpHV {
         }
         List<IMachine> machines = vbox.getMachines();
         for (IMachine machine : machines) {
+            try {
             if (machine.getName().equals(vmName)) {
                 if (machine.getGroups().contains(groupName)) {
                     handle = new OccpVBoxVM();
@@ -211,6 +216,12 @@ public class OccpVBoxHV implements OccpHV {
                     handle.name = vmName;
                     cachedVMs.put(vmName, handle);
                 }
+            }
+            } catch (VBoxException e) {
+                if (e.getResultCode() == /* E_ACCESSDENIED */0x80070005) {
+                    continue;
+                }
+                throw e;
             }
         }
         if (handle != null) {
@@ -260,6 +271,7 @@ public class OccpVBoxHV implements OccpHV {
                 throw new HVOperationFailedException(name, "Failed to get a handle to VirtualBox");
             }
             oSession = mgr_.getSessionObject();
+            ((OccpVBoxVM) vm).session = oSession;
             oMachine = ((OccpVBoxVM) vm).machine;
             String sessionType = "gui";
             // launch implies lock
@@ -293,16 +305,16 @@ public class OccpVBoxHV implements OccpHV {
         try {
             oMachine = ((OccpVBoxVM) vm).machine;
             MachineState state = oMachine.getState();
-            if (state == MachineState.PoweredOff) {
+            if (state == MachineState.PoweredOff || state == MachineState.Aborted) {
                 return;
             }
-            oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Shared);
+            oSession = ((OccpVBoxVM) vm).getSession();
+            lockMachine(oSession, oMachine, LockType.Shared);
             IConsole oConsole = oSession.getConsole();
             if (state == MachineState.Saved) {
                 if (OccpAdmin.force) {
                     logger.finest("Discarding Saved state of " + vm.getName());
-                    oConsole.discardSavedState(true);
+                    oSession.getMachine().discardSavedState(true);
                     return;
                 }
                 throw new VMOperationFailedException(name, vm.getName(), ErrorCode.POWER_OFF,
@@ -358,9 +370,9 @@ public class OccpVBoxHV implements OccpHV {
         try {
             oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
             oMachine = ((OccpVBoxVM) vm).machine;
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Write);
-            IConsole oConsole = oSession.getConsole();
-            IProgress oProgress = oConsole.takeSnapshot(snapshotName, "");
+            lockMachine(oSession, oMachine, LockType.Write);
+            Holder<String> uuid = new Holder<>();
+            IProgress oProgress = oSession.getMachine().takeSnapshot(snapshotName, "", true, uuid);
             oProgress.waitForCompletion(-1);
             long rc = oProgress.getResultCode();
             if (rc != 0) {
@@ -389,7 +401,6 @@ public class OccpVBoxHV implements OccpHV {
                     // No snapshots
                     if (e.getResultCode() == 0x80bb0001) {
                         createSnapshot(vm, snapshotBase);
-                        // oMachine.getCurrentStateModified();
                         snapshot = oMachine.findSnapshot(snapshotBase);
                     } else {
                         throw e;
@@ -481,7 +492,7 @@ public class OccpVBoxHV implements OccpHV {
         try {
             oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
             oMachine = ((OccpVBoxVM) vm).machine;
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Write);
+            lockMachine(oSession, oMachine, LockType.Write);
             long i = 0;
             String netName;
             boolean changed = false;
@@ -539,13 +550,13 @@ public class OccpVBoxHV implements OccpHV {
         try {
             oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
             oMachine = ((OccpVBoxVM) vm).machine;
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Write);
-            IConsole oConsole = oSession.getConsole();
+            lockMachine(oSession, oMachine, LockType.Write);
+            oMachine = oSession.getMachine();
             ISnapshot snapshot = oMachine.findSnapshot(snapshotName);
             if (snapshot == null) {
                 throw new IllegalArgumentException("Snapshot does not exist");
             }
-            IProgress oProgress = oConsole.restoreSnapshot(snapshot);
+            IProgress oProgress = oSession.getMachine().restoreSnapshot(snapshot);
             oProgress.waitForCompletion(-1);
             long rc = oProgress.getResultCode();
             if (rc != 0) {
@@ -568,7 +579,7 @@ public class OccpVBoxHV implements OccpHV {
         try {
             oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
             oMachine = ((OccpVBoxVM) vm).machine;
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Write);
+            lockMachine(oSession, oMachine, LockType.Write);
             List<IStorageController> controllers = oSession.getMachine().getStorageControllers();
             boolean found = false;
             String floppyControllerName = "Floppy device 0";
@@ -618,7 +629,7 @@ public class OccpVBoxHV implements OccpHV {
         try {
             oMachine = ((OccpVBoxVM) vm).machine;
             oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Write);
+            lockMachine(oSession, oMachine, LockType.Write);
             rwMachine = oSession.getMachine();
             List<String> groupList = new ArrayList<>();
             groupList.add(groupName);
@@ -660,7 +671,7 @@ public class OccpVBoxHV implements OccpHV {
         try {
             oMachine = ((OccpVBoxVM) vm).machine;
             oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Write);
+            lockMachine(oSession, oMachine, LockType.Write);
             oSession.getMachine().setBootOrder(1L, DeviceType.DVD);
             oSession.getMachine().saveSettings();
         } catch (Exception e) {
@@ -776,20 +787,20 @@ public class OccpVBoxHV implements OccpHV {
         }
     }
 
-    private synchronized boolean lockMachine(VirtualBoxManager mgr, IMachine oMachine, LockType type)
+    private synchronized boolean lockMachine(ISession oSession, IMachine oMachine, LockType type)
             throws OccpException {
         int tries = 0;
         logger.finest("lockMachine called from: " + Thread.currentThread().getStackTrace()[2] + " on thread "
                 + Thread.currentThread().getName());
         IEventSource es = null;
         IEventListener listener = null;
-        ISession oSession = mgr.getSessionObject();
         boolean haveLock = false;
         IEvent ev = null;
         try {
             do {
                 try {
-                    logger.finest("Locking the VM \"" + oMachine.getName() + "\" Using mgr" + mgr.hashCode() + " try "
+                    logger.finest("Locking the VM \"" + oMachine.getName() + "\" Using session" + oSession.hashCode()
+                            + " try "
                             + tries);
                     if (oSession.getState() != SessionState.Locked) {
                         ++tries;
@@ -858,7 +869,7 @@ public class OccpVBoxHV implements OccpHV {
         try {
             oMachine = ((OccpVBoxVM) vm).machine;
             oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Write);
+            lockMachine(oSession, oMachine, LockType.Write);
             // Remove it if it already exists so we can ensure it gets the current value
             for (ISharedFolder folder : oSession.getMachine().getSharedFolders()) {
                 if (folder.getName().equals("importdir")) {
@@ -885,10 +896,8 @@ public class OccpVBoxHV implements OccpHV {
         IEventListener listener = null;
         try {
             oMachine = ((OccpVBoxVM) vm).machine;
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Shared);
+            lockMachine(oSession, oMachine, LockType.Shared);
             IConsole oConsole = oSession.getConsole();
-            es = oConsole.getEventSource();
-            listener = es.createListener();
             try {
                 IGuest guest = oConsole.getGuest();
                 if (guest.getAdditionsStatus(AdditionsRunLevelType.Userland)) {
@@ -900,6 +909,8 @@ public class OccpVBoxHV implements OccpHV {
                 }
             }
             VBoxEventType events[] = { VBoxEventType.OnAdditionsStateChanged };
+            es = oConsole.getEventSource();
+            listener = es.createListener();
             es.registerListener(listener, Arrays.asList(events), false);
             boolean isReady = false;
             do {
@@ -959,7 +970,7 @@ public class OccpVBoxHV implements OccpHV {
             logger.fine("Transferring " + sourcePath + " to " + destPath + " on the VM \"" + vm.getName() + '"');
             oMachine = ((OccpVBoxVM) vm).machine;
             oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Shared);
+            lockMachine(oSession, oMachine, LockType.Shared);
             IConsole oConsole = oSession.getConsole();
             IGuest guest = oConsole.getGuest();
             if (guest == null) {
@@ -976,11 +987,11 @@ public class OccpVBoxHV implements OccpHV {
             }
             try {
                 // Don't overwrite OVA files unless requested to with --overwriteova
-                if (gs.fileExists(destPath) && destPath.endsWith("ova") && !OccpAdmin.overwrite) {
+                if (gs.fileExists(destPath, false) && destPath.endsWith("ova") && !OccpAdmin.overwrite) {
                     return;
                 }
-                if (gs.fileExists(destPath)) {
-                    gs.fileRemove(destPath);
+                if (gs.fileExists(destPath, false)) {
+                    gs.fsObjRemove(destPath);
                 }
             } catch (VBoxException e) {
                 if (e.getResultCode() != /* VERR_TIMEOUT */0x80bb0005) {
@@ -988,7 +999,7 @@ public class OccpVBoxHV implements OccpHV {
                 }
             }
 
-            file = gs.fileOpen(destPath, "w", "ca", permissions);
+            file = gs.fileOpen(destPath, FileAccessMode.ReadWrite, FileOpenAction.CreateOrReplace, permissions);
 
             byte[] buf = new byte[1024 * 64];
             Long transferred = (long) 0;
@@ -1058,7 +1069,7 @@ public class OccpVBoxHV implements OccpHV {
         try {
             oMachine = ((OccpVBoxVM) vm).machine;
             oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Shared);
+            lockMachine(oSession, oMachine, LockType.Shared);
             IConsole oConsole = oSession.getConsole();
             IGuest guest = oConsole.getGuest();
             if (guest == null) {
@@ -1078,7 +1089,7 @@ public class OccpVBoxHV implements OccpHV {
             if (localFile.exists()) {
                 localFile.delete();
             }
-            remoteFile = gs.fileOpen("/mnt/" + from, "r", "oe", permissions);
+            remoteFile = gs.fileOpen("/mnt/" + from, FileAccessMode.ReadOnly, FileOpenAction.OpenExisting, permissions);
             FileStatus status = remoteFile.getStatus();
             while (status != FileStatus.Open && status != FileStatus.Error) {
                 Thread.sleep(100);
@@ -1088,7 +1099,7 @@ public class OccpVBoxHV implements OccpHV {
             long currentPercent = 0;
             fos = new FileOutputStream(localFile);
             logger.finest("Querying size of " + from);
-            long fileSize = gs.fileQuerySize("/mnt/" + from);
+            long fileSize = gs.fileQuerySize("/mnt/" + from, true);
             logger.finest("Starting transfer of " + from + ", bytes: " + fileSize);
             Long transferred = (long) 0;
             while (transferred != fileSize) {
@@ -1150,7 +1161,7 @@ public class OccpVBoxHV implements OccpHV {
         try {
             oMachine = ((OccpVBoxVM) vm).machine;
             oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Shared);
+            lockMachine(oSession, oMachine, LockType.Shared);
             IConsole oConsole = oSession.getConsole();
             IGuest guest = oConsole.getGuest();
             if (guest == null) {
@@ -1166,7 +1177,7 @@ public class OccpVBoxHV implements OccpHV {
                         "Failed to get guest session");
             }
             String cmdName = cmd[0];
-            String[] args = Arrays.copyOfRange(cmd, 1, cmd.length);
+            String[] args = Arrays.copyOfRange(cmd, 0, cmd.length);
             logger.finest("The VM \"" + vm.getName() + "\" is Running: " + StringUtils.join(cmd, " "));
             List<ProcessCreateFlag> pcfs = new ArrayList<ProcessCreateFlag>();
             if (!waitForIt) {
@@ -1309,9 +1320,9 @@ public class OccpVBoxHV implements OccpHV {
             }
 
             oMachine = ((OccpVBoxVM) vm).machine;
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Write);
-            locked = true;
             oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
+            lockMachine(oSession, oMachine, LockType.Write);
+            locked = true;
             if (oMachine.getMemorySize() != ram) {
                 IMachine rwMachine = oSession.getMachine();
                 rwMachine.setMemorySize((long) ram);
@@ -1348,14 +1359,13 @@ public class OccpVBoxHV implements OccpHV {
         try {
             oSession = ((OccpVBoxVM) vm).vmMgr.getSessionObject();
             oMachine = ((OccpVBoxVM) vm).machine;
-            lockMachine(((OccpVBoxVM) vm).vmMgr, oMachine, LockType.Write);
-            IConsole oConsole = oSession.getConsole();
+            lockMachine(oSession, oMachine, LockType.Write);
             ISnapshot snapshot = oMachine.findSnapshot(snapshotName);
             if (snapshot == null) {
                 throw new VMOperationFailedException(name, vm.getName(), ErrorCode.DELETE_SNAPSHOT,
                         "Snapshot does not exist").set("snapshot", snapshotName);
             }
-            IProgress oProgress = oConsole.deleteSnapshot(snapshot.getId());
+            IProgress oProgress = oSession.getMachine().deleteSnapshot(snapshot.getId());
             oProgress.waitForCompletion(-1);
             long rc = oProgress.getResultCode();
             if (rc != 0) {
@@ -1406,7 +1416,7 @@ public class OccpVBoxHV implements OccpHV {
             }
             newMachine.saveSettings();
             vbox.registerMachine(newMachine);
-            lockMachine(this.mgr, newMachine, LockType.Write);
+            lockMachine(oSession, newMachine, LockType.Write);
             rwMachine = oSession.getMachine();
             rwMachine.setGroups(Arrays.asList(new String[] { groupName }));
             boolean hasPath = (isoFilename.lastIndexOf('/') >= 0);
