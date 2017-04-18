@@ -90,7 +90,7 @@ class occpadmin (
   file { '/etc/hostname':
     ensure  => file,
     content => "${hostname}",
-    notify => Service['hostname'],
+    notify => Exec['reload_hostname'],
   }
   # Write hostname to hosts file
   file { '/etc/hosts':
@@ -99,8 +99,8 @@ class occpadmin (
     notify  => File['/etc/hostname'],
   }
   # Make hostname take affect
-  service { 'hostname':
-    ensure    => running,
+  exec { 'reload_hostname':
+    command     => "hostnamectl set-hostname ${hostname}",
     subscribe => File['/etc/hostname'],
   }
 
