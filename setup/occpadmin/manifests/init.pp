@@ -8,8 +8,8 @@ class occpadmin (
 ) inherits occpadmin::params {
 
   # Ensure we are using a tested BaseVM, use others at your own risk
-  if ! ($::operatingsystem == 'Ubuntu' and $::lsbdistrelease == '14.04') {
-    fail('This is only intended for the Ubuntu 14.04 BaseVM, this operating system not supported.')
+  if ! ($::operatingsystem == 'Ubuntu' and $::lsbdistrelease == '16.04') {
+    fail('This is only intended for the Ubuntu 16.04 BaseVM, this operating system not supported.')
   }
 
   ##
@@ -31,8 +31,8 @@ class occpadmin (
     'make',
     'maven',
     'ntp',
-    'openjdk-7-jdk',
-    'openjdk-7-jre-headless',
+    'openjdk-8-jdk',
+    'openjdk-8-jre-headless',
     'openvpn',
     'squid3',
     'vim',
