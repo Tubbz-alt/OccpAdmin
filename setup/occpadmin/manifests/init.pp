@@ -86,17 +86,17 @@ class occpadmin (
   ##
   ## Configure the hostname
   ##
-  # Write hostname file
-  file { '/etc/hostname':
-    ensure  => file,
-    content => "${hostname}",
-    notify => Exec['reload_hostname'],
-  }
   # Write hostname to hosts file
   file { '/etc/hosts':
     ensure  => file,
     content => template("${module_name}/hosts.erb"),
     notify  => File['/etc/hostname'],
+  }
+  # Write hostname file
+  file { '/etc/hostname':
+    ensure  => file,
+    content => "${hostname}",
+    notify => Exec['reload_hostname'],
   }
   # Make hostname take affect
   exec { 'reload_hostname':
