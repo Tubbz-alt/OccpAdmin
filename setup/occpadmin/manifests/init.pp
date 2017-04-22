@@ -100,7 +100,7 @@ class occpadmin (
   }
   # Make hostname take affect
   exec { 'reload_hostname':
-    command     => "hostnamectl set-hostname ${hostname}",
+    command     => "/usr/bin/hostnamectl set-hostname ${hostname}",
     subscribe => File['/etc/hostname'],
   }
 
