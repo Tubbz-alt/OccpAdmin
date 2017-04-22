@@ -21,12 +21,16 @@ class occpadmin (
 
   # Set the default option to installed for Package resources
   Package { ensure => installed}
+
   # Note: we assume puppet is installed if we got this far
+
+  # dnsmasq will clobber resolvconf while install causing other packages to fail
+  # install it first so DNS resolution will work during other installs
+  package { 'dnsmasq': }
   $required_packages = [
     'ant',
     'bridge-utils',
     'curl',
-    'dnsmasq',
     'git',
     'make',
     'maven',
@@ -38,7 +42,9 @@ class occpadmin (
     'vim',
     'virtualbox-guest-utils']
   # Install the array of packages
-  package { $required_packages: }
+  package { $required_packages: 
+    require => Package['dnsmasq']
+  }
   ##
   ## Puppet passenger setup
   ## (some voodoo requried)
@@ -64,9 +70,8 @@ class occpadmin (
   ##
   ## Configure the services
   ##
-  # Stop dnsmasq and ensure it is not started at boot
+  # Stop dnsmasq from being started at boot
   service { 'dnsmasq':
-    ensure  => stopped,
     enable => false,
     require => Package['dnsmasq'],
   }
