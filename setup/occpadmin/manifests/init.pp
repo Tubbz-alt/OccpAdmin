@@ -34,7 +34,7 @@ class occpadmin (
     'openjdk-8-jdk',
     'openjdk-8-jre-headless',
     'openvpn',
-    'squid3',
+    'squid',
     'vim',
     'virtualbox-guest-utils']
   # Install the array of packages
