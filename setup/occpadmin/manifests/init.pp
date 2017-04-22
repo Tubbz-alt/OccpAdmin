@@ -379,13 +379,13 @@ class occpadmin (
     require => File["${occp_hidden_dir}"],
   }
   # Write the Squid config file
-  file { '/etc/squid3/squid.conf':
+  file { '/etc/squid/squid.conf':
     ensure => file,
     owner  => 'root',
     group  => 'root',
     mode   => '0644',
     source  => "puppet:///modules/${module_name}/squid.conf",
-    require => Package['squid3'],
+    require => Package['squid'],
   }
   # Write the NTP config file
   file { '/etc/ntp.conf':
