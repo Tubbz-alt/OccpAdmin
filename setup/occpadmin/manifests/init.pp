@@ -58,7 +58,7 @@ class occpadmin (
   # Run the puppet master once, after the hostname is set and it isn't running 
   # under passenger.
   exec { '/usr/bin/puppet master':
-    subscribe => [Service['apache2'], Service['hostname']],
+    subscribe => [Service['apache2'], Exec['reload_hostname']],
   }
 
   ##
