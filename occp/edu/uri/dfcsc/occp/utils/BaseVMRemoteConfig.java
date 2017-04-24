@@ -285,7 +285,7 @@ public class BaseVMRemoteConfig {
     private void handleJSchException(JSchException exception) throws ConfigManagerException {
         String message = exception.getMessage();
 
-        if (message.equalsIgnoreCase("java.net.NoRouteToHostException: No route to host")
+        if (message.contains("java.net.NoRouteToHostException: No route to host")
                 || message.contains("Connection refused") || message.contains("Connection timed out")
                 || message.contains("timeout") || message.contains("session is down")
                 || message.contains("End of IO Stream Read")) {
