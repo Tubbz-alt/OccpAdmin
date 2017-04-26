@@ -358,6 +358,22 @@ class occpadmin (
     "${occp_hidden_dir}",
     "${occp_hidden_dir}/modules",
     "${occp_hidden_dir}/OCCPReports",
+    "${occp_hidden_dir}/environments",
+    "${occp_hidden_dir}/environments/production",
+    "${occp_hidden_dir}/environments/production/manifests",
+    "${occp_hidden_dir}/environments/production/modules",
+    "${occp_hidden_dir}/environments/phase1",
+    "${occp_hidden_dir}/environments/phase1/manifests",
+    "${occp_hidden_dir}/environments/phase1/modules",
+    "${occp_hidden_dir}/environments/phase2",
+    "${occp_hidden_dir}/environments/phase2/manifests",
+    "${occp_hidden_dir}/environments/phase2/modules",
+    "${occp_hidden_dir}/environments/poweroff",
+    "${occp_hidden_dir}/environments/poweroff/manifests",
+    "${occp_hidden_dir}/environments/poweroff/modules",
+    "${occp_hidden_dir}/environments/poweroffp1",
+    "${occp_hidden_dir}/environments/poweroffp1/manifests",
+    "${occp_hidden_dir}/environments/poweroffp1/modules",
     "${occp_bin_dir}"]
   file { $occp_directories:
     ensure  => directory,
@@ -365,6 +381,15 @@ class occpadmin (
     group   => "${local_user}",
     require => User["${local_user}"],
   }
+  # Place a link from the nodes file to the default manifest location
+  file { "${occp_hidden_dir}/environments/production/manifests/nodes.pp":
+    ensure => link,
+    owner   => "${local_user}",
+    group   => "${local_user}",
+    mode    => '0644',
+    target =>  "${occp_hidden_dir}/nodes.pp"
+  }
+
   # Place the VPN ISO
   file { "${occp_hidden_dir}/vpn.iso":
     ensure  => file,
