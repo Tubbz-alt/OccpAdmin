@@ -36,10 +36,27 @@ class occphostname (
         mode    => '0644',
         content => template("${module_name}/debian_hostname.erb"),
       }
-      service { 'hostname':
-        ensure  => running,
-        require => [File['hostname file'], Host['host file']],
+      # Make hostname take affect
+      case $::operatingsystem {
+        'Ubuntu': {
+          if $::lsbdistrelease == '12.04' {
+            service { 'hostname':
+              ensure  => running,
+              require => [File['hostname file'], Host['host file']],
+            }
+          } else {
+            exec { 'reload hostname':
+              command       => "/usr/bin/hostnamectl set-hostname ${hostname}",
+            }
+          }
+        }
+        default: {
+            exec { 'reload hostname default':
+              command       => "/usr/bin/hostnamectl set-hostname ${hostname}",
+            }
+        }
       }
+
     } else {
       warning("${::osfamily} is not currently supported by ${module_name}, the hostname will not be set to ${hostname}!")
     }
