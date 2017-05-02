@@ -42,7 +42,7 @@ class occpadmin (
     'vim',
     'virtualbox-guest-utils']
   # Install the array of packages
-  package { ${required_packages}: 
+  package { "${required_packages}": 
     require => Package['dnsmasq']
   }
   package { 'puppetserver':
