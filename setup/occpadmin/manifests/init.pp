@@ -28,26 +28,24 @@ class occpadmin (
   # install it first so DNS resolution will work during other installs
   package { 'dnsmasq': }
   $required_packages = [
-    'ant',
     'bridge-utils',
     'curl',
     'git',
-    'make',
     'maven',
-    'ntp',
     'openjdk-8-jdk',
     'openjdk-8-jre-headless',
     'openvpn',
-    'squid',
-    'vim',
-    'virtualbox-guest-utils']
+    'vim']
   # Install the array of packages
   package { "${required_packages}": 
     require => Package['dnsmasq']
-  }
-  package { 'puppetserver':
-    require => Package[ "${required_packages}" ]
-  }
+  } ->
+  package { 'ant': } ->
+  package { 'make': } ->
+  package { 'ntp': } ->
+  package { 'squid': } ->
+  package { 'puppetserver': } ->
+  package { 'virtualbox-guest-utils': }
   ##
   ## Puppet passenger setup
   ## (some voodoo requried)
@@ -119,7 +117,7 @@ class occpadmin (
     ensure => file,
     owner  => 'root',
     group  => 'root',
-    mode   => 0644,
+    mode   => '0644',
     source => "puppet:///modules/${module_name}/ufw",
   }
   # Write UFW rules
@@ -127,7 +125,7 @@ class occpadmin (
     ensure  => file,
     owner   => 'root',
     group   => 'root',
-    mode    => 0644,
+    mode    => '0644',
     source  => "puppet:///modules/${module_name}/before.rules",
     require => File['/etc/default/ufw'],
   }
@@ -136,7 +134,7 @@ class occpadmin (
     ensure  => file,
     owner   => 'root',
     group   => 'root',
-    mode    => 0644,
+    mode    => '0644',
     source  => "puppet:///modules/${module_name}/sysctl.conf",
     require => File['/etc/ufw/before.rules'],
     notify  => Exec['/sbin/sysctl -p'],
@@ -163,7 +161,7 @@ class occpadmin (
     groups     => ['sudo','vboxsf'],
     shell      => '/bin/bash',
     password   => "${local_user_password}",
-    require    => Package['virtualbox-guest-utils'],
+    require    => Package[ 'virtualbox-guest-utils' ],
   }
   # Disable root account once we've created the local user
   user { 'root':  
