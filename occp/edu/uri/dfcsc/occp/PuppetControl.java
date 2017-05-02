@@ -530,20 +530,20 @@ public class PuppetControl extends ConfigManagerControl {
         StringBuilder occpVariables = new StringBuilder();
         occpVariables.append(currentTabLevel + "# AdminVM Generated OCCP Variables\n");
         if (host.getHostname() != null) {
-            occpVariables.append(currentTabLevel + "$OCCP_hostname = '" + host.getHostname() + "'\n");
+            occpVariables.append(currentTabLevel + "$occp_hostname = '" + host.getHostname() + "'\n");
         }
 
         if (host.getDomain() != null) {
-            occpVariables.append(currentTabLevel + "$OCCP_domain = '" + host.getDomain() + "'\n");
+            occpVariables.append(currentTabLevel + "$occp_domain = '" + host.getDomain() + "'\n");
         }
 
         if (host.getHostname() != null && host.getDomain() != null) {
-            occpVariables.append(currentTabLevel + "$OCCP_fqdn = '" + host.getHostname() + '.' + host.getDomain()
+            occpVariables.append(currentTabLevel + "$occp_fqdn = '" + host.getHostname() + '.' + host.getDomain()
                     + "'\n");
         }
 
         int numberOfInterfaces = host.getInterfaces().size();
-        occpVariables.append(currentTabLevel + "$OCCP_numberOfInterfaces = " + numberOfInterfaces + "\n");
+        occpVariables.append(currentTabLevel + "$occp_numberOfInterfaces = " + numberOfInterfaces + "\n");
 
         StringBuilder interfaceNames = new StringBuilder(), interfaceIPv4s = new StringBuilder();
         interfaceNames.append('[');
@@ -570,8 +570,8 @@ public class PuppetControl extends ConfigManagerControl {
         interfaceNames.append(arrayTerminator);
         interfaceIPv4s.append(arrayTerminator);
 
-        occpVariables.append(currentTabLevel + "$OCCP_InterfaceNames = " + interfaceNames);
-        occpVariables.append(currentTabLevel + "$OCCP_InterfaceIPv4s = " + interfaceIPv4s);
+        occpVariables.append(currentTabLevel + "$occp_InterfaceNames = " + interfaceNames);
+        occpVariables.append(currentTabLevel + "$occp_InterfaceIPv4s = " + interfaceIPv4s);
 
         return occpVariables.toString();
     }
@@ -622,7 +622,7 @@ public class PuppetControl extends ConfigManagerControl {
      * @return true if successful false otherwise
      */
     private boolean cleanCert(String certname) {
-        String[] cmd = { "sudo", "puppet", "cert", "clean", certname };
+        String[] cmd = { "puppet", "cert", "clean", certname };
         boolean successful = false;
         Runtime rt = Runtime.getRuntime();
         try {
@@ -630,7 +630,7 @@ public class PuppetControl extends ConfigManagerControl {
             if (retVal == 0 || retVal == 24) {
                 successful = true;
             } else {
-                logger.severe("Unable to clean the puppet master certs, exited with" + retVal);
+                logger.severe("Unable to clean the puppet master certs, exited with " + retVal);
                 successful = false; // Redundant but explicit
             }
         } catch (IOException | InterruptedException exception) {
