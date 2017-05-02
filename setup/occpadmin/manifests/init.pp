@@ -334,7 +334,7 @@ class occpadmin (
   file { '/etc/network/if-up.d/show-ip-address': 
     ensure => file,
     source => "puppet:///modules/${module_name}/show-ip-address",
-    mode   => 0755,
+    mode   => '0755',
     owner  => 'root',
     group  => 'root',
   }
@@ -348,7 +348,7 @@ class occpadmin (
     ensure  => file,
     owner   => 'root',
     group   => 'root',
-    mode    => 0440,
+    mode    => '0440',
     content => template("${module_name}/sudoers.erb"),
   }
   # OCCP Directories
