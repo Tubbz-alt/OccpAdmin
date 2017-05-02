@@ -41,7 +41,7 @@ fi
 
 # Installs puppet modules
 module_install(){
-  if [ ! -e "/etc/puppet/modules/$2" ]; then
+  if [ ! -e "/opt/puppetlabs/puppet/modules/$2" ]; then
     puppet module install --force $1
   fi
 }
@@ -76,7 +76,7 @@ else
 fi
 
 # Apply the manifest and log output
-puppet apply --modulepath /etc/puppet/modules/:$SCRIPT_DIR -e "$PUPPET_MANIFEST" 2>&1 | tee puppet.log
+puppet apply --modulepath /opt/puppetlabs/puppet/modules/:$SCRIPT_DIR -e "$PUPPET_MANIFEST" 2>&1 | tee puppet.log
 
 # Check puppet's exit code
 PUPPETRET=${PIPESTATUS[0]}

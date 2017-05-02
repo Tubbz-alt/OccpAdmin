@@ -42,30 +42,33 @@ class occpadmin (
     'vim',
     'virtualbox-guest-utils']
   # Install the array of packages
-  package { $required_packages: 
+  package { ${required_packages}: 
     require => Package['dnsmasq']
+  }
+  package { 'puppetserver':
+    require => Package[ ${required_packages} ]
   }
   ##
   ## Puppet passenger setup
   ## (some voodoo requried)
   ##
   # Install passenger when the hostname is set properly
-  package { 'puppetmaster-passenger':
-    ensure  => installed,
-    subscribe => File['/etc/hostname'],
-  }
-  # Now we need to run puppetmaster once, to acomplish this:
-  # Stop apache then start the master (we assume the user will reboot after)
-  service { 'apache2':
-    ensure  => stopped,
-    enable  => true,
-    subscribe => Package['puppetmaster-passenger'],
-  }
-  # Run the puppet master once, after the hostname is set and it isn't running 
-  # under passenger.
-  exec { '/usr/bin/puppet master':
-    subscribe => [Service['apache2'], Exec['reload_hostname']],
-  }
+  # package { 'puppetmaster-passenger':
+  #   ensure  => installed,
+  #   subscribe => File['/etc/hostname'],
+  # }
+  # # Now we need to run puppetmaster once, to acomplish this:
+  # # Stop apache then start the master (we assume the user will reboot after)
+  # service { 'apache2':
+  #   ensure  => stopped,
+  #   enable  => true,
+  #   subscribe => Package['puppetmaster-passenger'],
+  # }
+  # # Run the puppet master once, after the hostname is set and it isn't running 
+  # # under passenger.
+  # exec { '/usr/bin/puppet master':
+  #   subscribe => [Service['apache2'], Exec['reload_hostname']],
+  # }
 
   ##
   ## Configure the services
@@ -85,7 +88,6 @@ class occpadmin (
   service { 'puppet':
     ensure  => stopped,
     enable => false,
-    #require => Package['puppet'], # assumed to be installed
   }
 
   ##
@@ -279,40 +281,40 @@ class occpadmin (
   ## Configure Puppet
   ##
   # Configure master to serve the report directory
-  file { '/etc/puppet/fileserver.conf':
+  file { '/etc/puppetlabs/puppet/fileserver.conf':
     ensure  => file,
     owner   => 'root',
     group   => 'root',
     mode    => '0644',
     content => template("${module_name}/fileserver.conf.erb"),
-    require => Package["puppetmaster-passenger"],
+    require => Package[ 'puppetserver' ],
   }
   # Configure master to autosign certs
-  file { "/etc/puppet/autosign.conf":
+  file { '/etc/puppetlabs/puppet/autosign.conf':
     ensure  => file,
     content => '*',
-    require => Package["puppetmaster-passenger"],
+    require => Package[ 'puppetserver' ],
   }
   # Configure master to use OCCP Admin Program generated nodes.pp
-  file { "/etc/puppet/manifests/site.pp":
-    ensure  => file,
-    content => "import '${occp_hidden_dir}/nodes.pp'",
-    require => Package["puppetmaster-passenger"],
+  file { '/etc/puppetlabs/puppet/manifests/site.pp':
+    ensure  => link,
+    target => "${occp_hidden_dir}/nodes.pp",
+    require => Package[ 'puppetserver' ],
   }
   # Place puppet config file
-  file { "/etc/puppet/puppet.conf":
+  file { '/etc/puppetlabs/puppet/puppet.conf':
     ensure  => file,
     source  => "puppet:///modules/${module_name}/puppet.conf",
-    require => Package["puppetmaster-passenger"],
+    require => Package[ 'puppetserver' ],
   }
   # Copy OCCP Admin Program expected modules that aren't on the forge
-  file { "/etc/puppet/modules":
+  file { '/opt/puppetlabs/puppet/modules':
     ensure  => directory,
     recurse => true,
     force   => true,
     source  => "puppet:///modules/${module_name}/unpublishedModules/",
     sourceselect => all,
-    require => Package["puppetmaster-passenger"],
+    require => Package[ 'puppetserver' ],
   }
 
   ##
@@ -363,17 +365,11 @@ class occpadmin (
     "${occp_hidden_dir}/environments/production/manifests",
     "${occp_hidden_dir}/environments/production/modules",
     "${occp_hidden_dir}/environments/phase1",
-    "${occp_hidden_dir}/environments/phase1/manifests",
-    "${occp_hidden_dir}/environments/phase1/modules",
     "${occp_hidden_dir}/environments/phase2",
-    "${occp_hidden_dir}/environments/phase2/manifests",
-    "${occp_hidden_dir}/environments/phase2/modules",
     "${occp_hidden_dir}/environments/poweroff",
-    "${occp_hidden_dir}/environments/poweroff/manifests",
-    "${occp_hidden_dir}/environments/poweroff/modules",
     "${occp_hidden_dir}/environments/poweroffp1",
-    "${occp_hidden_dir}/environments/poweroffp1/manifests",
-    "${occp_hidden_dir}/environments/poweroffp1/modules",
+    "${occp_hidden_dir}/environments/poweroffp2",
+    "${occp_hidden_dir}/environments/hostname",
     "${occp_bin_dir}"]
   file { $occp_directories:
     ensure  => directory,
