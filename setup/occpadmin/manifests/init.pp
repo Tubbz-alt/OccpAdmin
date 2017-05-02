@@ -294,10 +294,15 @@ class occpadmin (
     require => Package[ 'puppetserver' ],
   }
   # Configure master to use OCCP Admin Program generated nodes.pp
-  file { '/etc/puppetlabs/puppet/manifests/site.pp':
+  file { '/etc/puppetlabs/code/environments/production/manifests/site.pp':
     ensure  => link,
     target => "${occp_hidden_dir}/nodes.pp",
     require => Package[ 'puppetserver' ],
+  }
+  file { "${occp_hidden_dir}/environments/production/manifests/site.pp":
+    ensure  => link,
+    target => "${occp_hidden_dir}/nodes.pp",
+    require => File[ $occp_directories ],
   }
   # Place puppet config file
   file { '/etc/puppetlabs/puppet/puppet.conf':
