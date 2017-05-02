@@ -37,7 +37,7 @@ class occpadmin (
     'openvpn',
     'vim']
   # Install the array of packages
-  package { "${required_packages}": 
+  package { $required_packages: 
     require => Package['dnsmasq']
   } ->
   package { 'ant': } ->
