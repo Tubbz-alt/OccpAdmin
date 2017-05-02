@@ -44,7 +44,6 @@ class occpadmin (
   package { 'make': } ->
   package { 'ntp': } ->
   package { 'squid': } ->
-  package { 'puppetserver': } ->
   package { 'virtualbox-guest-utils': }
   ##
   ## Puppet passenger setup
@@ -67,6 +66,15 @@ class occpadmin (
   # exec { '/usr/bin/puppet master':
   #   subscribe => [Service['apache2'], Exec['reload_hostname']],
   # }
+  package { 'puppetserver': 
+    require => Exec [ 'reload_hostname' ]
+  } ->
+  file_line { 'puppetserver_config':
+    ensure => present,
+    path   => '/etc/default/puppetserver',
+    line   => 'JAVA_ARGS="-Xms500m -Xmx500m -XX:MaxPermSize=256m"'
+    match  => '^JAVA_ARGS="-Xms2g',
+  }
 
   ##
   ## Configure the services
@@ -86,6 +94,10 @@ class occpadmin (
   service { 'puppet':
     ensure  => stopped,
     enable => false,
+  }
+  service { 'puppetserver':
+    enable  => true,
+    require => Package[ 'puppetserver' ]
   }
 
   ##
@@ -299,10 +311,13 @@ class occpadmin (
     target => "${occp_hidden_dir}/nodes.pp",
     require => Package[ 'puppetserver' ],
   }
-  file { "${occp_hidden_dir}/environments/production/manifests/site.pp":
+  file { 'default_manifest':
+    name    => "${occp_hidden_dir}/environments/production/manifests/site.pp",
     ensure  => link,
-    target => "${occp_hidden_dir}/nodes.pp",
-    require => File[ $occp_directories ],
+    owner   => "${local_user}",
+    group   => "${local_user}",
+    mode    => '0644',
+    target  => "${occp_hidden_dir}/nodes.pp",
   }
   # Place puppet config file
   file { '/etc/puppetlabs/puppet/puppet.conf':
@@ -379,14 +394,7 @@ class occpadmin (
     owner   => "${local_user}",
     group   => "${local_user}",
     require => User["${local_user}"],
-  }
-  # Place a link from the nodes file to the default manifest location
-  file { "${occp_hidden_dir}/environments/production/manifests/nodes.pp":
-    ensure => link,
-    owner   => "${local_user}",
-    group   => "${local_user}",
-    mode    => '0644',
-    target =>  "${occp_hidden_dir}/nodes.pp"
+    before  => File[ 'default_manifest' ]
   }
 
   # Place the VPN ISO

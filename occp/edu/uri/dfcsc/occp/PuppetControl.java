@@ -70,7 +70,7 @@ public class PuppetControl extends ConfigManagerControl {
 
             // Puppet command to run
             String puppetCommandBase = "puppet agent --certname " + label
-                    + " --logdest /dev/null --test --environment ";
+                    + " --logdest console --onetime --no-daemonize --detailed-exitcodes --environment ";
 
             CommandOutput puppetOutput = null;
             // Attempt to run the command
@@ -622,7 +622,7 @@ public class PuppetControl extends ConfigManagerControl {
      * @return true if successful false otherwise
      */
     private boolean cleanCert(String certname) {
-        String[] cmd = { "puppet", "cert", "clean", certname };
+        String[] cmd = {"sudo", "puppet", "cert", "clean", certname };
         boolean successful = false;
         Runtime rt = Runtime.getRuntime();
         try {

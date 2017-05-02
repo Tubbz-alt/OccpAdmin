@@ -1,5 +1,5 @@
 class occp::sslremove {
-  $sslDir = '/var/lib/puppet/ssl'
+  $sslDir = $settings::ssldir
   file { $sslDir:
     ensure => absent,
     force  => true,
