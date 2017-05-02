@@ -46,7 +46,7 @@ class occpadmin (
     require => Package['dnsmasq']
   }
   package { 'puppetserver':
-    require => Package[ ${required_packages} ]
+    require => Package[ "${required_packages}" ]
   }
   ##
   ## Puppet passenger setup
