@@ -42,7 +42,7 @@ fi
 # Installs puppet modules
 module_install(){
   if [ ! -e "/opt/puppetlabs/puppet/modules/$2" ]; then
-    puppet module install --force $1
+    puppet module install --force --target-dir /opt/puppetlabs/puppet/modules $1
   fi
 }
 

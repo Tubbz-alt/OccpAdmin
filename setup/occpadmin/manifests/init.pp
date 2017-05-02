@@ -308,7 +308,7 @@ class occpadmin (
     require => Package[ 'puppetserver' ],
   }
   # Copy OCCP Admin Program expected modules that aren't on the forge
-  file { '/opt/puppetlabs/puppet/modules':
+  file { '/etc/puppetlabs/puppet/code/modules':
     ensure  => directory,
     recurse => true,
     force   => true,
