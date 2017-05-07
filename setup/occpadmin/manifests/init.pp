@@ -67,7 +67,7 @@ class occpadmin (
   #   subscribe => [Service['apache2'], Exec['reload_hostname']],
   # }
   package { 'puppetserver': 
-    require => Exec [ 'reload_hostname' ]
+    require => Exec['reload_hostname']
   } ->
   file_line { 'puppetserver_config':
     ensure => present,
