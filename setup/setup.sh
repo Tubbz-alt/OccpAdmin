@@ -64,6 +64,7 @@ module_install puppetlabs/concat concat
 module_install puppetlabs/stdlib stdlib
 module_install example42-stdmod stdmod
 module_install puppetlabs/vcsrepo vcsrepo
+module_install maestrodev/rvm rvm
 
 # Choose the manifest
 echo -e "Applying config"
