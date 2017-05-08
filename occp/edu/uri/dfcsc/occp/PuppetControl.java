@@ -69,7 +69,7 @@ public class PuppetControl extends ConfigManagerControl {
             }
 
             // Puppet command to run
-            String puppetCommandBase = "/opt/puppetlabs/bin/puppet agent --certname " + label
+            String puppetCommandBase = "source /etc/profile && puppet agent --certname " + label
                     + " --logdest console --onetime --no-daemonize --detailed-exitcodes --environment ";
 
             CommandOutput puppetOutput = null;
