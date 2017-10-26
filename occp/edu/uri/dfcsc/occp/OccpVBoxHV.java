@@ -12,7 +12,7 @@ import java.util.logging.Logger;
 
 import org.apache.commons.lang.RandomStringUtils;
 import org.apache.commons.lang.StringUtils;
-import org.virtualbox_5_0.*;
+import org.virtualbox_5_2.*;
 
 import edu.uri.dfcsc.occp.exceptions.OccpException;
 import edu.uri.dfcsc.occp.exceptions.vm.HVOperationFailedException;
@@ -523,8 +523,8 @@ public class OccpVBoxHV implements OccpHV {
                         changed = true;
                     }
                     // Ensure we use the best and same networking on all cards
-                    if (oNetworkAdapter.getAdapterType() != NetworkAdapterType.Virtio) {
-                        oNetworkAdapter.setAdapterType(NetworkAdapterType.Virtio);
+                    if (oNetworkAdapter.getAdapterType() != NetworkAdapterType.I82540EM) {
+                        oNetworkAdapter.setAdapterType(NetworkAdapterType.I82540EM);
                         changed = true;
                     }
                 } else if (oNetworkAdapter.getEnabled()) {
@@ -1404,7 +1404,7 @@ public class OccpVBoxHV implements OccpHV {
             IStorageController floppybus = newMachine.addStorageController("Floppy device 0", StorageBus.Floppy);
             floppybus.setControllerType(StorageControllerType.I82078);
             INetworkAdapter net = newMachine.getNetworkAdapter((long) 0);
-            net.setAdapterType(NetworkAdapterType.Virtio);
+            net.setAdapterType(NetworkAdapterType.I82540EM);
             net.setAttachmentType(NetworkAttachmentType.Bridged);
             IHost host = vbox.getHost();
             List<IHostNetworkInterface> interfaces = host.getNetworkInterfaces();
