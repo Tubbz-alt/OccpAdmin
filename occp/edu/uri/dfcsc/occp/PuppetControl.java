@@ -63,8 +63,7 @@ public class PuppetControl extends ConfigManagerControl {
             // Attempt to sync the time on the client so the certificates do not have a time issue
             CommandOutput timeSyncCommandOutput = remoteConfig.sendCommand("ntpdate -v -d 12.14.16.1");
             if (timeSyncCommandOutput.getExitStatus() != 0) {
-                logger.warning("Unable to sync the time on \""
-                        + label
+                logger.warning("Unable to sync the time on \"" + label
                         + "\". This may cause issues with puppet's certificates if the master and client do not agree on the time.");
             }
 
@@ -79,8 +78,8 @@ public class PuppetControl extends ConfigManagerControl {
                 if (phase.equals("phase2")) {
                     puppetOutput = remoteConfig.sendCommand(puppetCommandBase + phase, "/sbin/poweroff");
                 } else if (phase.equals("phase1")) {
-                    puppetOutput = remoteConfig
-                            .sendCommand(puppetCommandBase + phase, puppetCommandBase + "poweroffp1");
+                    puppetOutput = remoteConfig.sendCommand(puppetCommandBase + phase,
+                            puppetCommandBase + "poweroffp1");
                 } else {
                     puppetOutput = remoteConfig.sendCommand(puppetCommandBase + phase, puppetCommandBase + "poweroff");
                 }
@@ -110,16 +109,16 @@ public class PuppetControl extends ConfigManagerControl {
             // This work around looks for "dependency cycle" in stderr and assumes the worst
             String puppetError = puppetOutput.getErrorOutput();
             if (puppetError.contains("dependency cycle")) {
-                logger.severe("There seems to be a dependency cycle, puppet cannot apply " + phase + " on \"" + label
-                        + '"');
+                logger.severe(
+                        "There seems to be a dependency cycle, puppet cannot apply " + phase + " on \"" + label + '"');
                 logger.severe(puppetError);
                 throw new ConfigManagerPermanentFailureException("Puppet phase application failed");
             }
 
         } else {
             // Couldn't find the host
-            throw new ConfigManagerPermanentFailureException("Unable to locate the host \"" + label
-                    + "\" to apply phase " + phase + " to");
+            throw new ConfigManagerPermanentFailureException(
+                    "Unable to locate the host \"" + label + "\" to apply phase " + phase + " to");
         }
     }
 
@@ -138,7 +137,8 @@ public class PuppetControl extends ConfigManagerControl {
      * @param scenarioFileDir The path to the directory this scenario is in
      * @return Success/failure
      */
-    private boolean prepareMaster(String compiledNodes, ArrayList<ContentPackInfo> contentPacks, String scenarioFileDir) {
+    private boolean prepareMaster(String compiledNodes, ArrayList<ContentPackInfo> contentPacks,
+            String scenarioFileDir) {
         boolean encounteredError = false;
 
         // Set the Reports path
@@ -205,7 +205,8 @@ public class PuppetControl extends ConfigManagerControl {
 
                 if (moduleDirectory.delete()) {
                     if (!moduleDirectory.mkdir()) {
-                        logger.warning("The module directory was actually a file instead, we deleted the file but we failed to create the directory. We expected "
+                        logger.warning(
+                                "The module directory was actually a file instead, we deleted the file but we failed to create the directory. We expected "
                                 + moduleDirPath + " to be a directory.");
                         encounteredError = true;
                     }
@@ -218,8 +219,8 @@ public class PuppetControl extends ConfigManagerControl {
         } else {
             // For some reason the module directory does not exist, we'll try to fix that now
             if (!moduleDirectory.mkdir()) {
-                logger.warning("Module Directory did not exist and we failed to create it. We expected "
-                        + moduleDirPath + " to be a directory.");
+                logger.warning("Module Directory did not exist and we failed to create it. We expected " + moduleDirPath
+                        + " to be a directory.");
                 encounteredError = true;
             }
         }
@@ -538,8 +539,8 @@ public class PuppetControl extends ConfigManagerControl {
         }
 
         if (host.getHostname() != null && host.getDomain() != null) {
-            occpVariables.append(currentTabLevel + "$occp_fqdn = '" + host.getHostname() + '.' + host.getDomain()
-                    + "'\n");
+            occpVariables
+                    .append(currentTabLevel + "$occp_fqdn = '" + host.getHostname() + '.' + host.getDomain() + "'\n");
         }
 
         int numberOfInterfaces = host.getInterfaces().size();

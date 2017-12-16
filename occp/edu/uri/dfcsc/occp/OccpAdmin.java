@@ -529,6 +529,10 @@ public class OccpAdmin {
             }
 
             if (host.getBaseVM() != null) {
+                if (host.getPhase() == 2) {
+                    host.setClone(host.getBaseVM());
+                    return 2;
+                }
                 return 0;
             }
         }
@@ -768,13 +772,15 @@ public class OccpAdmin {
 
         final class CloneVM implements Callable<OccpVM> {
             OccpHV hv;
+            OccpHost host;
             String from;
             String to;
             int phase;
             Callable<OccpVM> finish;
 
-            CloneVM(OccpHV hv_, String from_, String to_, int phase_, Callable<OccpVM> finish_) {
+            CloneVM(OccpHV hv_, OccpHost host_, String from_, String to_, int phase_, Callable<OccpVM> finish_) {
                 hv = hv_;
+                host = host_;
                 from = from_;
                 to = to_;
                 finish = finish_;
@@ -800,7 +806,7 @@ public class OccpAdmin {
                             return null;
                         }
                     } else {
-                        if (isBase) {
+                        if (isBase || host.getBaseVM().equals(host.getClone())) {
                             fromvm = hv.getBaseVM(from);
                         } else {
                             fromvm = hv.getVM(from);
@@ -953,7 +959,7 @@ public class OccpAdmin {
                             + "\" on the hypervisor: " + hv.getName());
 
                     PhaseFinish phase1 = new PhaseFinish(host.getLabel(), hv, 1);
-                    CloneVM futurevm = new CloneVM(hv, host.getBaseVM(), host.getLabel(), 0, phase1);
+                    CloneVM futurevm = new CloneVM(hv, host, host.getBaseVM(), host.getLabel(), 0, phase1);
                     callables.put(host.getLabel(), futurevm);
                     break;
                 case 1:
@@ -968,7 +974,7 @@ public class OccpAdmin {
                         } catch (VMNotFoundException e) {
                             // If this is a clone, do that, otherwise try to import it
                             if (host.getClone() != null) {
-                                CloneVM futurevm2 = new CloneVM(hv, host.getClone(), host.getLabel(), 1, phase2);
+                                CloneVM futurevm2 = new CloneVM(hv, host, host.getClone(), host.getLabel(), 1, phase2);
                                 callables.put(host.getLabel(), futurevm2);
                             } else {
                                 ImportVM importvm = new ImportVM(hv, host.getOvaName(), host.getLabel(), phase, phase2);
@@ -995,7 +1001,8 @@ public class OccpAdmin {
                     } catch (VMNotFoundException e) {
                         // If this is a clone, do that, otherwise try to import it
                         if (host.getClone() != null) {
-                            callables.put(host.getLabel(), new CloneVM(hv, host.getClone(), host.getLabel(), 2, null));
+                            callables.put(host.getLabel(), new CloneVM(hv, host, host.getClone(), host.getLabel(), 2,
+                                    null));
                         } else if (host.getIsoName() != null) {
                             IsoVM importvm = new IsoVM(hv, host.getIsoName(), host.getLabel());
                             callables.put(host.getLabel(), importvm);
@@ -1346,7 +1353,7 @@ public class OccpAdmin {
             conf.print("proto tcp-client\nauth-nocache\ntls-client\nclient\nnobind\n");
             // Dynamic part
             conf.println("remote " + serverIP + " " + serverPort);
-            certDN = "CN=client" + (++clientNum);
+            certDN = "CN=client-" + brName;
         } else {
             // Static part
             conf.print("proto tcp-server\nmode server\ntls-server\nclient-to-client\nuser nobody\n"
@@ -1357,7 +1364,7 @@ public class OccpAdmin {
             conf.println("<dh>");
             failure |= !ca.genDHParams(conf);
             conf.println("</dh>");
-            certDN = "CN=server" + (++serverNum);
+            certDN = "CN=server-" + (brName);
         }
         conf.println("<ca>");
         ca.writeCert(caKey.cert, conf);
@@ -1416,7 +1423,6 @@ public class OccpAdmin {
             // Generate blocks for each bridge and associated network
             for (String net : vpnNetworks) {
                 String ifaceName = "eth" + (x + 1);
-                // String brName = "br" + x;
                 String brName = net;
                 interfaces.println("#" + net);
                 interfaces.println("auto " + ifaceName);
@@ -2093,8 +2099,8 @@ public class OccpAdmin {
      */
     private static boolean configureRuntimeVPN() {
         boolean localFailure = false;
-        hv2net_vpn = new HashMap<>();
-        net2vpn = new HashMap<>();
+        hv2net_vpn = new TreeMap<>();
+        net2vpn = new TreeMap<>();
         int vpnPort = 7890;
         for (Entry<String, Set<String>> entry : net2hv.entrySet()) {
             String network = entry.getKey();
