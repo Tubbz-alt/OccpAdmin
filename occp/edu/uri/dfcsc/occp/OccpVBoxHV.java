@@ -740,6 +740,9 @@ public class OccpVBoxHV implements OccpHV {
                     if (base.contains("\\")) {
                         dirSep = "\\";
                     }
+                    if (base.charAt(base.length()-1) == "\\".charAt(0) || base.charAt(base.length()-1) == "/".charAt(0)) {
+                    	base = base.substring(0, base.length()-1);
+                    }
                     // Use the filename from the ova in case there is more than one
                     String fullpath = aVBoxValues.value.get(x);
                     String filename = fullpath.substring(fullpath.lastIndexOf(dirSep) + 1);
