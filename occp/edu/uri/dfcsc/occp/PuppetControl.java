@@ -685,6 +685,8 @@ public class PuppetControl extends ConfigManagerControl {
                 // Parameter
                 result.append(puppetTab(currentTabLevel));
                 result.append("enable_dhcp => true,\n");
+                result.append(puppetTab(currentTabLevel));
+                result.append("restart_all_nic => false,\n");
 
                 // Close network::interface
                 result.append(puppetTab(--currentTabLevel));
@@ -713,6 +715,8 @@ public class PuppetControl extends ConfigManagerControl {
                 result.append(" => '");
                 result.append(currentInterface.getV4Netmask());
                 result.append("',\n");
+                result.append(puppetTab(currentTabLevel));
+                result.append("restart_all_nic => false,\n");
 
                 if (currentInterface.hasV4Broadcast()) {
                     // Parameter: broadcast
