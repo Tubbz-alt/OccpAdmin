@@ -23,7 +23,7 @@ This project has adopted the branching model described on http://nvie.com/posts/
 
 Creating an Admin VM
 
-1. Clone the Ubuntu 14.04 Server Base VM
+1. Clone the Ubuntu 16.04 Server Base VM
 1. Add a second NIC to the VM and attach it to your setup network
 1. Login to the VM. The default credentials are root:0ccpadmin.
   1. You should update the VM now `apt-get update && apt-get dist-upgrade -y`

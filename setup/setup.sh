@@ -1,6 +1,6 @@
 #!/bin/bash
 # This script can either:
-# - Create an AdminVM from the Ubuntu 14.04 BaseVM
+# - Create an AdminVM from the Ubuntu 16.04 BaseVM
 # - Update an existing AdminVM
 
 # Find where we are located
