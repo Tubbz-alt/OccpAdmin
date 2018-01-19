@@ -30,8 +30,9 @@ Creating an Admin VM
   1. Install git `apt-get install -y git`
   1. Clone this repository `git clone https://github.com/OpenCyberChallengePlatform/OccpAdmin.git`
   1. Run the installer `./OccpAdmin/setup/setup.sh -c`*
+  1. Remove the old repository `sudo rm -rf /root/OccpAdmin`
   1. Reboot the VM `reboot`
-  1. Login with the new credentials (occpadmin:0ccpadmin) and remove the old repository `sudo rm -rf /root/OccpAdmin`
+  1. Login with the new credentials (occpadmin:0ccpadmin)
   1. You should change the password, but otherwise you should have an equivalent Admin VM to the one available from the project's website.
 
 *_Note: Experienced users may discover the Puppet module has some parameters that are not exposed via the setup script. Changing those parameters should be done with caution since it will create an Admin VM that does not match published documentation._
