@@ -35,6 +35,7 @@ class occpadmin (
     'openjdk-8-jdk',
     'openjdk-8-jre-headless',
     'openvpn',
+    'ufw',
     'vim']
   # Install the array of packages
   package { $required_packages: 
