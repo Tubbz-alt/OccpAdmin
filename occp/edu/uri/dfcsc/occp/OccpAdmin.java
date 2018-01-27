@@ -51,7 +51,7 @@ import edu.uri.dfcsc.occp.utils.DHCPServer;
  */
 
 public class OccpAdmin {
-    private static final String majorVersion = "1", minorVersion = "1", patchVersion = "0";
+    private static final String majorVersion = "1", minorVersion = "2", patchVersion = "0";
     /**
      * Location of internal use items (vpn.iso, router.iso, hypervisors.xml, puppet stuff)
      */
