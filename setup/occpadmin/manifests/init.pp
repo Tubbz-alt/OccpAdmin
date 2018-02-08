@@ -35,6 +35,7 @@ class occpadmin (
     'openjdk-8-jdk',
     'openjdk-8-jre-headless',
     'openvpn',
+    'ufw',
     'vim']
   # Install the array of packages
   package { $required_packages: 
@@ -72,7 +73,7 @@ class occpadmin (
   file_line { 'puppetserver_config':
     ensure => present,
     path   => '/etc/default/puppetserver',
-    line   => 'JAVA_ARGS="-Xms500m -Xmx500m -XX:MaxPermSize=256m"'
+    line   => 'JAVA_ARGS="-Xms500m -Xmx500m -XX:MaxPermSize=256m"',
     match  => '^JAVA_ARGS="-Xms2g',
   }
 

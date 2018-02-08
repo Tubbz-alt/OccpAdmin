@@ -1,6 +1,6 @@
 #!/bin/bash
 # This script can either:
-# - Create an AdminVM from the Ubuntu 14.04 BaseVM
+# - Create an AdminVM from the Ubuntu 16.04 BaseVM
 # - Update an existing AdminVM
 
 # Find where we are located
@@ -21,7 +21,7 @@ done
 
 # Exit if we have not gotten confirmation of the warning
 if ! $UNDERSTANDS ; then
-  echo -e "This script should only be run on an Ubuntu 14.04 BaseVM, or a properly backed up Admin VM, as root. It will assume full control while enforcing the required configuration and could harm any other system. If you understand, run this script with -c to continue."
+  echo -e "This script should only be run on an Ubuntu 16.04 BaseVM, or a properly backed up Admin VM, as root. It will assume full control while enforcing the required configuration and could harm any other system. If you understand, run this script with -c to continue."
   exit 1
 fi
 

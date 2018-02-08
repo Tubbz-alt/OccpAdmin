@@ -55,8 +55,8 @@ public class BaseVMRemoteConfig {
      * @param keyComment will be used to remove the key if destroyRemoteAccess() is called
      * @throws ConfigManagerPermanentFailureException If there was an issue with the ssh keys
      */
-    public BaseVMRemoteConfig(String username, String address, String privateKeyFile, String password, String keyComment)
-            throws ConfigManagerPermanentFailureException {
+    public BaseVMRemoteConfig(String username, String address, String privateKeyFile, String password,
+            String keyComment) throws ConfigManagerPermanentFailureException {
         this.setUsername(username);
         this.setAddress(address);
         if (!this.setKey(privateKeyFile, password, keyComment)) {
@@ -293,8 +293,8 @@ public class BaseVMRemoteConfig {
             throw new ConfigManagerTemporaryFailureException("Could not connect to: " + this.getAddress(), exception);
         } else if (message.equalsIgnoreCase("Auth fail") || message.startsWith("SSH_MSG_DISCONNECT")) {
             // Authentication issue
-            throw new ConfigManagerPermanentFailureException("Could not authenticate as: " + this.getUsername()
-                    + " on " + this.getAddress());
+            throw new ConfigManagerPermanentFailureException(
+                    "Could not authenticate as: " + this.getUsername() + " on " + this.getAddress());
         } else {
             // Not sure, wrap the exception message and let the caller decide what to do... good luck
             throw new ConfigManagerPermanentFailureException("Unrecognized JSch Exception encountered", exception);
@@ -400,10 +400,11 @@ public class BaseVMRemoteConfig {
         CommandOutput result = null;
 
         Session session = this.establishSession();
-
         ChannelExec channel = null;
 
         try {
+            // Set a long timeout to give the vm time to boot
+            session.setTimeout(300000);
             // Connect to our session(s)
             session.connect();
 
@@ -623,8 +624,8 @@ public class BaseVMRemoteConfig {
         }
 
         // We haven't thrown any errors at this point store the results of the command execution
-        commandOutput = new CommandOutput(exitStatus, output.toString(), errorOutput.toString(), "Equivalent to: ssh "
-                + this.getUsername() + "@" + this.getAddress() + " \"bash -s <\" " + scriptPath);
+        commandOutput = new CommandOutput(exitStatus, output.toString(), errorOutput.toString(),
+                "Equivalent to: ssh " + this.getUsername() + "@" + this.getAddress() + " \"bash -s <\" " + scriptPath);
 
         return commandOutput;
     }
